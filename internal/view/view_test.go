@@ -1,0 +1,76 @@
+package view
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	"github.com/emersion/go-imap/v2"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/policy"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
+)
+
+type fakeProvider struct{ messages []provider.Message }
+
+func (f *fakeProvider) Folders(context.Context, config.Provider) ([]string, error) {
+	return []string{"INBOX/A", "INBOX/Private"}, nil
+}
+func (f *fakeProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
+	return f.messages, nil
+}
+func (f *fakeProvider) Send(context.Context, config.Provider, string, []string, []byte) error {
+	return nil
+}
+
+func TestVirtualIdentityAndHiddenMail(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "state.json")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := config.Profile{Folders: config.Rules{Allow: []string{"ro:INBOX/A"}}, Inbound: config.ContentRule{DeniedSubjects: []string{"Password recovery"}}}
+	p, err := policy.Compile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeProvider{messages: []provider.Message{
+		{UID: imap.UID(100), Raw: []byte("From: a@example.org\r\nSubject: Invoice\r\n\r\nhello")},
+		{UID: imap.UID(101), Raw: []byte("From: a@example.org\r\nSubject: Password recovery\r\n\r\nsecret")},
+	}}
+	svc := Service{Provider: f, Store: store}
+	folders, err := svc.Folders(ctx, config.Provider{}, p)
+	if err != nil || len(folders) != 1 || folders[0] != "INBOX/A" {
+		t.Fatalf("folders=%v err=%v", folders, err)
+	}
+	read := func() *Snapshot {
+		t.Helper()
+		result, err := svc.Snapshot(ctx, "bot", "home", "INBOX/A", config.Provider{}, profile, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	first := read()
+	if len(first.Messages) != 1 || first.Messages[0].UID != 1 || first.UIDNext != 2 {
+		t.Fatalf("unexpected snapshot %+v", first)
+	}
+	f.messages = append(f.messages, provider.Message{UID: 102, Raw: []byte("Subject: Password recovery\r\n\r\nsecret2")})
+	second := read()
+	if second.UIDNext != first.UIDNext || len(second.Messages) != 1 {
+		t.Fatal("hidden mail changed virtual counts or IDs")
+	}
+	restarted, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.Store = restarted
+	third := read()
+	if third.UIDValidity != first.UIDValidity || third.Messages[0].UID != first.Messages[0].UID {
+		t.Fatal("identity changed across restart")
+	}
+	if _, err := svc.Snapshot(ctx, "bot", "home", "INBOX/Private", config.Provider{}, profile, p); err == nil {
+		t.Fatal("private folder available")
+	}
+}

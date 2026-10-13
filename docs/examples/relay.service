@@ -1,0 +1,11 @@
+[Unit]
+Description=Sireno AI email relay
+
+[Service]
+ExecStart=/home/owner/.local/bin/sireno serve --config /home/owner/.config/sireno/config.yml
+Restart=on-failure
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,40 @@
+# Keep this file owner-readable only after adding real credentials: chmod 600 config.yml
+providers:
+  personal:
+    address: owner@example.org
+    imap:
+      address: imap.example.org:993
+      username: owner@example.org
+      password_command: [pass, show, mail/imap]
+    smtp:
+      address: smtp.example.org:465
+      username: owner@example.org
+      password_command: [pass, show, mail/smtp]
+
+profiles:
+  invoices:
+    folders:
+      allow: ["ro:INBOX/Invoices", "rw:Sent/Hermes"]
+      deny: ["ro:INBOX/Private"]
+    addresses:
+      allow: ["ro:billing@example.org", "wo:accounting@example.org"]
+    inbound:
+      denied_subjects: ["Password recovery", "re:(?i)reset.*password"]
+      remove_links: true
+      # Optional. It must read bounded message text from stdin and write only:
+      # {"status":"clean"} or {"status":"finding"}. Any other result hides mail.
+      # scanner: [sireno-gitleaks-scanner]
+    outbound:
+      denied_bodies: ["re:(?i)private key"]
+
+users:
+  hermes-agent:
+    provider: personal
+    profile: invoices
+    password_command: [pass, show, agents/hermes]
+    # Defaults to true. Set false to opt out of X-Sireno-Agent on sent mail.
+    tag_sent: true
+
+listen:
+  imap: 127.0.0.1:1143
+  smtp: 127.0.0.1:1025
