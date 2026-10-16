@@ -19,15 +19,22 @@ import (
 )
 
 type Message struct {
-	UID   imap.UID
-	Raw   []byte
-	Flags []imap.Flag
+	UID         imap.UID
+	UIDValidity uint32
+	Raw         []byte
+	Flags       []imap.Flag
 }
 
 type Client interface {
 	Folders(context.Context, config.Provider) ([]string, error)
 	Messages(context.Context, config.Provider, string) ([]Message, error)
 	Send(context.Context, config.Provider, string, []string, []byte) error
+}
+
+// FlagStore is an optional targeted mutation capability. Keeping it separate
+// from Client makes unsupported provider operations unavailable by default.
+type FlagStore interface {
+	StoreFlags(context.Context, config.Provider, string, imap.UID, uint32, []imap.Flag, imap.StoreFlagsOp) error
 }
 
 type Remote struct{}
@@ -143,7 +150,7 @@ func (Remote) Messages(ctx context.Context, account config.Provider, folder stri
 		if size > mail.MaxMessage || len(raw) > mail.MaxMessage || uid == 0 {
 			continue
 		}
-		messages = append(messages, Message{UID: uid, Raw: raw, Flags: flags})
+		messages = append(messages, Message{UID: uid, UIDValidity: selected.UIDValidity, Raw: raw, Flags: flags})
 	}
 	if err := cmd.Close(); err != nil {
 		return nil, err
@@ -170,4 +177,30 @@ func (Remote) Send(ctx context.Context, account config.Provider, from string, re
 		return fmt.Errorf("upstream SMTP submission failed (delivery status may be unknown): %w", err)
 	}
 	return nil
+}
+
+// StoreFlags changes flags for exactly one upstream UID. It selects and checks
+// the mailbox generation immediately before issuing the UID STORE command, so
+// a virtual ID from an earlier UIDVALIDITY generation cannot mutate new mail.
+func (Remote) StoreFlags(ctx context.Context, account config.Provider, folder string, uid imap.UID, uidValidity uint32, flags []imap.Flag, op imap.StoreFlagsOp) error {
+	if folder == "" || uid == 0 || uidValidity == 0 || len(flags) == 0 {
+		return errors.New("invalid flag update")
+	}
+	if op != imap.StoreFlagsAdd && op != imap.StoreFlagsDel {
+		return errors.New("unsupported flag update")
+	}
+	client, err := connect(ctx, account.IMAP)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	selected, err := client.Select(folder, nil).Wait()
+	if err != nil {
+		return err
+	}
+	if selected.UIDValidity != uidValidity {
+		return errors.New("mailbox changed")
+	}
+	command := client.Store(imap.UIDSetNum(uid), &imap.StoreFlags{Op: op, Silent: true, Flags: flags}, nil)
+	return command.Close()
 }

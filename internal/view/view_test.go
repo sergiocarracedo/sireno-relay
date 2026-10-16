@@ -36,8 +36,8 @@ func TestVirtualIdentityAndHiddenMail(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := &fakeProvider{messages: []provider.Message{
-		{UID: imap.UID(100), Raw: []byte("From: a@example.org\r\nSubject: Invoice\r\n\r\nhello")},
-		{UID: imap.UID(101), Raw: []byte("From: a@example.org\r\nSubject: Password recovery\r\n\r\nsecret")},
+		{UID: imap.UID(100), UIDValidity: 101, Raw: []byte("From: a@example.org\r\nSubject: Invoice\r\n\r\nhello")},
+		{UID: imap.UID(101), UIDValidity: 101, Raw: []byte("From: a@example.org\r\nSubject: Password recovery\r\n\r\nsecret")},
 	}}
 	svc := Service{Provider: f, Store: store}
 	folders, err := svc.Folders(ctx, config.Provider{}, p)
@@ -56,7 +56,7 @@ func TestVirtualIdentityAndHiddenMail(t *testing.T) {
 	if len(first.Messages) != 1 || first.Messages[0].UID != 1 || first.UIDNext != 2 {
 		t.Fatalf("unexpected snapshot %+v", first)
 	}
-	f.messages = append(f.messages, provider.Message{UID: 102, Raw: []byte("Subject: Password recovery\r\n\r\nsecret2")})
+	f.messages = append(f.messages, provider.Message{UID: 102, UIDValidity: 101, Raw: []byte("Subject: Password recovery\r\n\r\nsecret2")})
 	second := read()
 	if second.UIDNext != first.UIDNext || len(second.Messages) != 1 {
 		t.Fatal("hidden mail changed virtual counts or IDs")
@@ -72,5 +72,39 @@ func TestVirtualIdentityAndHiddenMail(t *testing.T) {
 	}
 	if _, err := svc.Snapshot(ctx, "bot", "home", "INBOX/Private", config.Provider{}, profile, p); err == nil {
 		t.Fatal("private folder available")
+	}
+}
+
+func TestVirtualIdentityResetsWhenUpstreamUIDValidityChanges(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := config.Profile{Folders: config.Rules{Allow: []string{"rw:INBOX"}}}
+	p, err := policy.Compile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeProvider{messages: []provider.Message{{
+		UID: 42, UIDValidity: 100, Raw: []byte("From: a@example.org\r\nSubject: Invoice\r\n\r\nfirst"),
+	}}}
+	svc := Service{Provider: f, Store: store}
+	first, err := svc.Snapshot(ctx, "bot", "home", "INBOX", config.Provider{}, profile, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.messages = []provider.Message{{
+		UID: 42, UIDValidity: 101, Raw: []byte("From: a@example.org\r\nSubject: Replacement\r\n\r\nsecond"),
+	}}
+	second, err := svc.Snapshot(ctx, "bot", "home", "INBOX", config.Provider{}, profile, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.UIDValidity == second.UIDValidity {
+		t.Fatal("upstream UIDVALIDITY change retained virtual namespace")
+	}
+	if len(second.Messages) != 1 || second.Messages[0].UID != 1 || second.Messages[0].Mail.Subject != "Replacement" {
+		t.Fatalf("unexpected reset snapshot: %+v", second)
 	}
 }

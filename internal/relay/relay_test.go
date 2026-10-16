@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emersion/go-imap/v2"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/view"
@@ -20,17 +21,34 @@ func tokenHash(token string) string {
 }
 
 type fake struct {
-	sent int
-	data []byte
+	sent     int
+	data     []byte
+	messages []provider.Message
+	stored   struct {
+		folder      string
+		uid         imap.UID
+		uidValidity uint32
+		flags       []imap.Flag
+		op          imap.StoreFlagsOp
+	}
 }
 
 func (*fake) Folders(context.Context, config.Provider) ([]string, error) { return nil, nil }
-func (*fake) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
-	return nil, nil
+func (f *fake) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
+	return f.messages, nil
 }
 func (f *fake) Send(_ context.Context, _ config.Provider, _ string, _ []string, data []byte) error {
 	f.sent++
 	f.data = data
+	return nil
+}
+
+func (f *fake) StoreFlags(_ context.Context, _ config.Provider, folder string, uid imap.UID, uidValidity uint32, flags []imap.Flag, op imap.StoreFlagsOp) error {
+	f.stored.folder = folder
+	f.stored.uid = uid
+	f.stored.uidValidity = uidValidity
+	f.stored.flags = append([]imap.Flag(nil), flags...)
+	f.stored.op = op
 	return nil
 }
 
@@ -101,6 +119,41 @@ users:
 	}
 	if _, err := r.AuthenticateToken("wrong-token"); err == nil {
 		t.Fatal("wrong token authenticated")
+	}
+}
+
+func TestUpdateFlagsRevalidatesVirtualMessage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	content := fmt.Sprintf(`providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot: {folders: {allow: ["rw:INBOX"]}}
+users:
+  bot: {provider: home, profile: bot, token_hash: %s}
+`, tokenHash("agent-token"))
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f := &fake{messages: []provider.Message{{
+		UID: 42, UIDValidity: 101, Raw: []byte("From: sender@example.org\r\nSubject: Hi\r\n\r\nBody"),
+	}}}
+	r := &Relay{ConfigPath: path, Provider: f, Store: mustStore(t)}
+	identity, err := r.AuthenticateToken("agent-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := r.Snapshot(context.Background(), identity, "INBOX")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.UpdateFlags(context.Background(), identity, "INBOX", snapshot.Messages[0].UID, []imap.Flag{imap.FlagSeen}, imap.StoreFlagsAdd); err != nil {
+		t.Fatal(err)
+	}
+	if f.stored.folder != "INBOX" || f.stored.uid != 42 || f.stored.uidValidity != 101 || f.stored.op != imap.StoreFlagsAdd || len(f.stored.flags) != 1 || f.stored.flags[0] != imap.FlagSeen {
+		t.Fatalf("unexpected store call: %+v", f.stored)
 	}
 }
 

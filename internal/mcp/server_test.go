@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emersion/go-imap/v2"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
@@ -32,7 +33,20 @@ func (fakeProvider) Send(context.Context, config.Provider, string, []string, []b
 type attachmentProvider struct{ fakeProvider }
 
 func (attachmentProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
-	return []provider.Message{{UID: 42, Raw: []byte("From: store@example.org\r\nTo: me@example.org\r\nCc: accounts@example.org\r\nDate: Wed, 14 Oct 2026 09:30:00 +0000\r\nSubject: Receipt\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nTotal\r\n--x\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=receipt.pdf\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQK\r\n--x--\r\n")}}, nil
+	return []provider.Message{{UID: 42, UIDValidity: 1, Raw: []byte("From: store@example.org\r\nTo: me@example.org\r\nCc: accounts@example.org\r\nDate: Wed, 14 Oct 2026 09:30:00 +0000\r\nSubject: Receipt\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nTotal\r\n--x\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=receipt.pdf\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQK\r\n--x--\r\n")}}, nil
+}
+
+type mutationProvider struct {
+	attachmentProvider
+	called bool
+}
+
+func (p *mutationProvider) StoreFlags(_ context.Context, _ config.Provider, folder string, uid imap.UID, uidValidity uint32, flags []imap.Flag, op imap.StoreFlagsOp) error {
+	if folder != "INBOX" || uid != 42 || uidValidity != 1 || len(flags) != 1 || flags[0] != imap.FlagSeen || op != imap.StoreFlagsAdd {
+		return fmt.Errorf("unexpected update")
+	}
+	p.called = true
+	return nil
 }
 
 func TestHandlerRequiresBearerToken(t *testing.T) {
@@ -130,5 +144,39 @@ users:
 	item := listed.(map[string]any)["messages"].([]envelope)[0]
 	if len(item.From) != 1 || len(item.To) != 1 || len(item.Cc) != 1 || item.Date != "2026-10-14T09:30:00Z" || len(item.Attachments) != 1 || item.Attachments[0].Name != "receipt.pdf" {
 		t.Fatalf("list item=%#v", item)
+	}
+}
+
+func TestUpdateMessageFlagsUsesVirtualID(t *testing.T) {
+	digest := sha256.Sum256([]byte("test-token"))
+	path := filepath.Join(t.TempDir(), "config.yml")
+	text := fmt.Sprintf(`providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot:
+    folders: {allow: ["rw:INBOX"]}
+    inbound: {attachments: {allow: ["application/pdf"]}}
+users:
+  bot: {provider: home, profile: bot, token_hash: %x}
+`, digest)
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := &mutationProvider{}
+	store, err := view.Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &relay.Relay{ConfigPath: path, Provider: p, Store: store}
+	identity, err := r.AuthenticateToken("test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = updateMessageFlags(r)(context.WithValue(context.Background(), identityKey{}, identity), nil, updateMessageFlagsArgs{Folder: "INBOX", UID: 1, Action: "add", Flags: []string{"seen"}})
+	if err != nil || !p.called {
+		t.Fatalf("result error=%v called=%v", err, p.called)
 	}
 }

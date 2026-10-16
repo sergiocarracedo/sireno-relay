@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/emersion/go-imap/v2"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/mail"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/policy"
@@ -203,6 +204,61 @@ func (r *Relay) Send(ctx context.Context, identity *Identity, from string, recip
 		return errors.New("policy changed; retry submission")
 	}
 	return r.Provider.Send(ctx, latest.Account, from, recipients, data)
+}
+
+// UpdateFlags changes a small safe subset of flags on a current virtual
+// message. It deliberately does not permit \Deleted or replacement flag sets:
+// deleting may require unsafe expunge behavior, and replacement can silently
+// discard flags an agent was not authorized to control.
+func (r *Relay) UpdateFlags(ctx context.Context, identity *Identity, folder string, messageUID uint32, flags []imap.Flag, op imap.StoreFlagsOp) error {
+	if folder == "" || messageUID == 0 || !safeFlagUpdate(flags, op) {
+		return errors.New("message unavailable")
+	}
+	current, err := r.Current(identity)
+	if err != nil || !current.Policy.WriteFolder(folder) {
+		return errors.New("message unavailable")
+	}
+	snapshot, err := (&view.Service{Provider: r.Provider, Store: r.Store}).Snapshot(ctx, current.Name, current.AccountName, folder, current.Account, current.Profile, current.Policy)
+	if err != nil || snapshot.UpstreamUIDValidity == 0 {
+		return errors.New("message unavailable")
+	}
+	var target *view.Message
+	for i := range snapshot.Messages {
+		if snapshot.Messages[i].UID == messageUID {
+			target = &snapshot.Messages[i]
+			break
+		}
+	}
+	if target == nil {
+		return errors.New("message unavailable")
+	}
+	latest, err := r.Current(identity)
+	if err != nil || !samePolicy(current, latest) || !latest.Policy.WriteFolder(folder) {
+		return errors.New("policy changed; retry update")
+	}
+	store, ok := r.Provider.(provider.FlagStore)
+	if !ok {
+		return errors.New("message update unavailable")
+	}
+	if err := store.StoreFlags(ctx, latest.Account, folder, target.UpstreamUID, snapshot.UpstreamUIDValidity, flags, op); err != nil {
+		return errors.New("message update unavailable")
+	}
+	return nil
+}
+
+func safeFlagUpdate(flags []imap.Flag, op imap.StoreFlagsOp) bool {
+	if len(flags) == 0 || (op != imap.StoreFlagsAdd && op != imap.StoreFlagsDel) {
+		return false
+	}
+	allowed := map[imap.Flag]bool{imap.FlagSeen: true, imap.FlagFlagged: true, imap.FlagAnswered: true}
+	seen := make(map[imap.Flag]bool, len(flags))
+	for _, flag := range flags {
+		if !allowed[flag] || seen[flag] {
+			return false
+		}
+		seen[flag] = true
+	}
+	return true
 }
 
 func samePolicy(a, b *Identity) bool {

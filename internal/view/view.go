@@ -28,16 +28,18 @@ type Message struct {
 }
 
 type Snapshot struct {
-	Folder      string
-	UIDValidity uint32
-	UIDNext     uint32
-	Messages    []Message
+	Folder              string
+	UIDValidity         uint32
+	UpstreamUIDValidity uint32
+	UIDNext             uint32
+	Messages            []Message
 }
 
 type idState struct {
-	UIDValidity uint32            `json:"uid_validity"`
-	Next        uint32            `json:"next"`
-	Visible     map[string]uint32 `json:"visible"`
+	UIDValidity         uint32            `json:"uid_validity"`
+	UpstreamUIDValidity uint32            `json:"upstream_uid_validity"`
+	Next                uint32            `json:"next"`
+	Visible             map[string]uint32 `json:"visible"`
 }
 
 type Store struct {
@@ -157,20 +159,29 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 	}
 	name := string(key)
 	state := s.Store.states[name]
+	upstreamUIDValidity := uint32(0)
+	for _, item := range items {
+		if item.UIDValidity == 0 {
+			continue
+		}
+		if upstreamUIDValidity != 0 && upstreamUIDValidity != item.UIDValidity {
+			return nil, errors.New("mailbox unavailable")
+		}
+		upstreamUIDValidity = item.UIDValidity
+	}
 	created := state == nil
-	if state == nil {
-		var value [4]byte
-		if _, err := rand.Read(value[:]); err != nil {
+	if state == nil || (upstreamUIDValidity != 0 && state.UpstreamUIDValidity != 0 && state.UpstreamUIDValidity != upstreamUIDValidity) {
+		state, err = newIDState(upstreamUIDValidity)
+		if err != nil {
 			return nil, err
 		}
-		validity := binary.BigEndian.Uint32(value[:])
-		if validity == 0 {
-			validity = 1
-		}
-		state = &idState{UIDValidity: validity, Next: 1, Visible: make(map[string]uint32)}
+	} else if upstreamUIDValidity != 0 && state.UpstreamUIDValidity == 0 {
+		// State created before a mailbox had messages gains its upstream
+		// generation as soon as one becomes available.
+		state = &idState{UIDValidity: state.UIDValidity, UpstreamUIDValidity: upstreamUIDValidity, Next: state.Next, Visible: state.Visible}
 	}
-	next := &idState{UIDValidity: state.UIDValidity, Next: state.Next, Visible: make(map[string]uint32)}
-	result := &Snapshot{Folder: folder, UIDValidity: next.UIDValidity}
+	next := &idState{UIDValidity: state.UIDValidity, UpstreamUIDValidity: state.UpstreamUIDValidity, Next: state.Next, Visible: make(map[string]uint32)}
+	result := &Snapshot{Folder: folder, UIDValidity: next.UIDValidity, UpstreamUIDValidity: next.UpstreamUIDValidity}
 	for _, candidate := range candidates {
 		uid, ok := state.Visible[candidate.key]
 		if !ok {
@@ -195,8 +206,20 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 	return result, nil
 }
 
+func newIDState(upstreamUIDValidity uint32) (*idState, error) {
+	var value [4]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return nil, err
+	}
+	validity := binary.BigEndian.Uint32(value[:])
+	if validity == 0 {
+		validity = 1
+	}
+	return &idState{UIDValidity: validity, UpstreamUIDValidity: upstreamUIDValidity, Next: 1, Visible: make(map[string]uint32)}, nil
+}
+
 func sameState(a, b *idState) bool {
-	if a == nil || b == nil || a.UIDValidity != b.UIDValidity || a.Next != b.Next || len(a.Visible) != len(b.Visible) {
+	if a == nil || b == nil || a.UIDValidity != b.UIDValidity || a.UpstreamUIDValidity != b.UpstreamUIDValidity || a.Next != b.Next || len(a.Visible) != len(b.Visible) {
 		return false
 	}
 	for key, uid := range a.Visible {

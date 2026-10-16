@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/emersion/go-imap/v2"
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
@@ -31,6 +32,7 @@ func HandlerWithAudit(r *relay.Relay, logger *slog.Logger, captureContent bool) 
 	gomcp.AddTool(server, &gomcp.Tool{Name: "list_messages", Description: "List sanitized messages visible in one folder"}, messages(r))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "read_message", Description: "Read one sanitized visible message by virtual UID"}, readMessage(r))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "read_messages", Description: "Read up to 20 sanitized visible messages by virtual UID"}, readMessages(r))
+	gomcp.AddTool(server, &gomcp.Tool{Name: "update_message_flags", Description: "Add or remove safe flags on one visible writable message"}, updateMessageFlags(r))
 	inner := gomcp.NewStreamableHTTPHandler(func(*http.Request) *gomcp.Server { return server }, &gomcp.StreamableHTTPOptions{JSONResponse: true})
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if origin := req.Header.Get("Origin"); origin != "" && origin != "http://sireno-relay" {
@@ -147,6 +149,13 @@ type messageContent struct {
 	Attachments []attachmentDescriptor `json:"attachments,omitempty"`
 }
 
+type updateMessageFlagsArgs struct {
+	Folder string   `json:"folder" jsonschema:"folder containing the message"`
+	UID    uint32   `json:"uid" jsonschema:"virtual UID returned by list_messages"`
+	Flags  []string `json:"flags" jsonschema:"one or more of seen, flagged, answered"`
+	Action string   `json:"action" jsonschema:"add or remove"`
+}
+
 func messages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, listMessagesArgs) (*gomcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *gomcp.CallToolRequest, args listMessagesArgs) (*gomcp.CallToolResult, any, error) {
 		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
@@ -212,6 +221,56 @@ func readMessages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, 
 		}
 		return structuredResult(map[string]any{"messages": items})
 	}
+}
+
+func updateMessageFlags(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, updateMessageFlagsArgs) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *gomcp.CallToolRequest, args updateMessageFlagsArgs) (*gomcp.CallToolResult, any, error) {
+		if args.Folder == "" || args.UID == 0 {
+			return nil, nil, errors.New("message unavailable")
+		}
+		op, ok := flagOperation(args.Action)
+		if !ok {
+			return nil, nil, errors.New("message unavailable")
+		}
+		flags, ok := messageFlags(args.Flags)
+		if !ok {
+			return nil, nil, errors.New("message unavailable")
+		}
+		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
+		if err := r.UpdateFlags(ctx, identity, args.Folder, args.UID, flags, op); err != nil {
+			return nil, nil, errors.New("message update unavailable")
+		}
+		return structuredResult(map[string]any{"updated": true})
+	}
+}
+
+func flagOperation(action string) (imap.StoreFlagsOp, bool) {
+	switch action {
+	case "add":
+		return imap.StoreFlagsAdd, true
+	case "remove":
+		return imap.StoreFlagsDel, true
+	default:
+		return 0, false
+	}
+}
+
+func messageFlags(names []string) ([]imap.Flag, bool) {
+	if len(names) == 0 || len(names) > 3 {
+		return nil, false
+	}
+	known := map[string]imap.Flag{"seen": imap.FlagSeen, "flagged": imap.FlagFlagged, "answered": imap.FlagAnswered}
+	flags := make([]imap.Flag, 0, len(names))
+	seen := make(map[string]bool, len(names))
+	for _, name := range names {
+		flag, ok := known[name]
+		if !ok || seen[name] {
+			return nil, false
+		}
+		seen[name] = true
+		flags = append(flags, flag)
+	}
+	return flags, true
 }
 
 func messageResult(folder string, message view.Message) messageContent {
