@@ -2,7 +2,7 @@
 Description=Sireno AI email relay
 
 [Service]
-ExecStart=/home/owner/.local/bin/sireno serve --config /home/owner/.config/sireno/config.yml
+ExecStart=/home/owner/.local/bin/sireno-relay serve --config /home/owner/.config/sireno/config.yml
 Restart=on-failure
 NoNewPrivileges=yes
 PrivateTmp=yes

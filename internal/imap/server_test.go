@@ -32,14 +32,14 @@ func TestIMAPIsolatedView(t *testing.T) {
 	cfg := `providers:
   home:
     address: me@example.org
-    imap: {address: "imap.example.org:993", username: me, password_command: [printf, password]}
-    smtp: {address: "smtp.example.org:465", username: me, password_command: [printf, password]}
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
 profiles:
   safe:
     folders: {allow: ["ro:INBOX/A"]}
     inbound: {denied_subjects: ["Password recovery"]}
 users:
-  bot: {provider: home, profile: safe, password_command: [printf, secret]}
+  bot: {provider: home, profile: safe, password: [printf, secret]}
 `
 	if err := os.WriteFile(path, []byte(cfg), 0600); err != nil {
 		t.Fatal(err)

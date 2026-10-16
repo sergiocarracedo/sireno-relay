@@ -1,0 +1,248 @@
+package mcp
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/view"
+)
+
+type identityKey struct{}
+
+// Handler exposes only policy-filtered operations. It authenticates every
+// request; MCP sessions are never used as credentials.
+func Handler(r *relay.Relay) http.Handler {
+	return HandlerWithAudit(r, nil, false)
+}
+
+func HandlerWithAudit(r *relay.Relay, logger *slog.Logger, captureContent bool) http.Handler {
+	server := gomcp.NewServer(&gomcp.Implementation{Name: "sireno-relay", Version: "dev"}, nil)
+	gomcp.AddTool(server, &gomcp.Tool{Name: "list_folders", Description: "List folders visible to the authenticated user"}, folders(r))
+	gomcp.AddTool(server, &gomcp.Tool{Name: "list_messages", Description: "List sanitized messages visible in one folder"}, messages(r))
+	gomcp.AddTool(server, &gomcp.Tool{Name: "read_message", Description: "Read one sanitized visible message by virtual UID"}, readMessage(r))
+	gomcp.AddTool(server, &gomcp.Tool{Name: "read_messages", Description: "Read up to 20 sanitized visible messages by virtual UID"}, readMessages(r))
+	inner := gomcp.NewStreamableHTTPHandler(func(*http.Request) *gomcp.Server { return server }, &gomcp.StreamableHTTPOptions{JSONResponse: true})
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if origin := req.Header.Get("Origin"); origin != "" && origin != "http://sireno-relay" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		identity, ok := authenticatedIdentity(r, w, req)
+		if !ok {
+			return
+		}
+		if req.URL.Path == "/mcp/attachments" {
+			if logger != nil {
+				logger.Info("MCP attachment download", "event", "mcp.attachment_download", "user", identity.Name, "method", req.Method, "path", req.URL.Path)
+			}
+			serveAttachment(r, identity, w, req)
+			return
+		}
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var handler http.Handler = inner
+		if logger != nil {
+			handler = audit.WrapMCP(handler, logger, captureContent, identity.Name)
+		}
+		handler.ServeHTTP(w, req.WithContext(context.WithValue(req.Context(), identityKey{}, identity)))
+	})
+}
+
+func authenticatedIdentity(r *relay.Relay, w http.ResponseWriter, req *http.Request) (*relay.Identity, bool) {
+	parts := strings.Fields(req.Header.Get("Authorization"))
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return nil, false
+	}
+	identity, err := r.AuthenticateToken(parts[1])
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return nil, false
+	}
+	return identity, true
+}
+
+func serveAttachment(r *relay.Relay, identity *relay.Identity, w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	query := req.URL.Query()
+	messageUID, messageErr := strconv.ParseUint(query.Get("message_uid"), 10, 32)
+	attachmentID, attachmentErr := strconv.ParseUint(query.Get("attachment_id"), 10, 32)
+	folder := query.Get("folder")
+	if messageErr != nil || attachmentErr != nil || folder == "" {
+		http.Error(w, "attachment unavailable", http.StatusNotFound)
+		return
+	}
+	attachment, err := r.Attachment(req.Context(), identity, folder, uint32(messageUID), uint32(attachmentID))
+	if err != nil {
+		http.Error(w, "attachment unavailable", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", attachment.MIMEType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(attachment.Bytes)
+}
+
+type listMessagesArgs struct {
+	Folder string `json:"folder" jsonschema:"folder to list"`
+}
+
+type envelope struct {
+	UID         uint32              `json:"uid"`
+	Subject     string              `json:"subject"`
+	From        []string            `json:"from,omitempty"`
+	To          []string            `json:"to,omitempty"`
+	Cc          []string            `json:"cc,omitempty"`
+	Date        string              `json:"date,omitempty"`
+	Attachments []attachmentSummary `json:"attachments,omitempty"`
+}
+
+type attachmentSummary struct {
+	Name     string `json:"name"`
+	MIMEType string `json:"mime_type"`
+	Size     int    `json:"size"`
+}
+
+type attachmentDescriptor struct {
+	ID          uint32 `json:"id"`
+	Name        string `json:"name"`
+	MIMEType    string `json:"mime_type"`
+	Size        int    `json:"size"`
+	DownloadURL string `json:"download_url"`
+}
+
+type readMessageArgs struct {
+	Folder string `json:"folder" jsonschema:"folder containing the message"`
+	UID    uint32 `json:"uid" jsonschema:"virtual UID returned by list_messages"`
+}
+
+type readMessagesArgs struct {
+	Folder string   `json:"folder" jsonschema:"folder containing the messages"`
+	UIDs   []uint32 `json:"uids" jsonschema:"up to 20 virtual UIDs returned by list_messages"`
+}
+
+type messageContent struct {
+	UID         uint32                 `json:"uid"`
+	Subject     string                 `json:"subject"`
+	From        []string               `json:"from,omitempty"`
+	To          []string               `json:"to,omitempty"`
+	Cc          []string               `json:"cc,omitempty"`
+	Body        string                 `json:"body"`
+	Attachments []attachmentDescriptor `json:"attachments,omitempty"`
+}
+
+func messages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, listMessagesArgs) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *gomcp.CallToolRequest, args listMessagesArgs) (*gomcp.CallToolResult, any, error) {
+		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
+		if identity == nil || args.Folder == "" {
+			return nil, nil, errors.New("mailbox unavailable")
+		}
+		snapshot, err := r.Snapshot(ctx, identity, args.Folder)
+		if err != nil {
+			return nil, nil, errors.New("mailbox unavailable")
+		}
+		items := make([]envelope, 0, len(snapshot.Messages))
+		for _, message := range snapshot.Messages {
+			item := envelope{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc}
+			if message.Mail.Date != nil {
+				item.Date = message.Mail.Date.Format(time.RFC3339)
+			}
+			for _, attachment := range message.Mail.Attachments {
+				item.Attachments = append(item.Attachments, attachmentSummary{Name: attachment.Name, MIMEType: attachment.MIMEType, Size: len(attachment.Bytes)})
+			}
+			items = append(items, item)
+		}
+		data, _ := json.Marshal(items)
+		result := map[string]any{"messages": items}
+		return &gomcp.CallToolResult{Content: []gomcp.Content{&gomcp.TextContent{Text: string(data)}}, StructuredContent: result}, result, nil
+	}
+}
+
+func readMessage(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, readMessageArgs) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *gomcp.CallToolRequest, args readMessageArgs) (*gomcp.CallToolResult, any, error) {
+		if args.Folder == "" || args.UID == 0 {
+			return nil, nil, errors.New("message unavailable")
+		}
+		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
+		message, err := r.Message(ctx, identity, args.Folder, args.UID)
+		if err != nil {
+			return nil, nil, errors.New("message unavailable")
+		}
+		result := map[string]any{"message": messageResult(args.Folder, *message)}
+		return structuredResult(result)
+	}
+}
+
+func readMessages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, readMessagesArgs) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *gomcp.CallToolRequest, args readMessagesArgs) (*gomcp.CallToolResult, any, error) {
+		if args.Folder == "" || len(args.UIDs) == 0 || len(args.UIDs) > 20 {
+			return nil, nil, errors.New("between one and 20 message UIDs are required")
+		}
+		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
+		seen := make(map[uint32]bool, len(args.UIDs))
+		for _, uid := range args.UIDs {
+			if uid == 0 || seen[uid] {
+				return nil, nil, errors.New("message unavailable")
+			}
+			seen[uid] = true
+		}
+		messages, err := r.Messages(ctx, identity, args.Folder, args.UIDs)
+		if err != nil {
+			return nil, nil, errors.New("message unavailable")
+		}
+		items := make([]messageContent, 0, len(messages))
+		for _, message := range messages {
+			items = append(items, messageResult(args.Folder, message))
+		}
+		return structuredResult(map[string]any{"messages": items})
+	}
+}
+
+func messageResult(folder string, message view.Message) messageContent {
+	result := messageContent{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc, Body: message.Mail.Body}
+	for _, attachment := range message.Mail.Attachments {
+		result.Attachments = append(result.Attachments, attachmentDescriptor{ID: attachment.ID, Name: attachment.Name, MIMEType: attachment.MIMEType, Size: len(attachment.Bytes), DownloadURL: attachmentURL(folder, message.UID, attachment.ID)})
+	}
+	return result
+}
+
+func attachmentURL(folder string, messageUID, attachmentID uint32) string {
+	return "/mcp/attachments?folder=" + url.QueryEscape(folder) + "&message_uid=" + strconv.FormatUint(uint64(messageUID), 10) + "&attachment_id=" + strconv.FormatUint(uint64(attachmentID), 10)
+}
+
+func structuredResult(result map[string]any) (*gomcp.CallToolResult, any, error) {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return nil, nil, errors.New("message unavailable")
+	}
+	return &gomcp.CallToolResult{Content: []gomcp.Content{&gomcp.TextContent{Text: string(data)}}, StructuredContent: result}, result, nil
+}
+
+func folders(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, struct{}) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *gomcp.CallToolRequest, _ struct{}) (*gomcp.CallToolResult, any, error) {
+		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
+		items, err := r.Folders(ctx, identity)
+		if err != nil {
+			return nil, nil, err
+		}
+		data, _ := json.Marshal(items)
+		result := map[string]any{"folders": items}
+		return &gomcp.CallToolResult{Content: []gomcp.Content{&gomcp.TextContent{Text: string(data)}}, StructuredContent: result}, result, nil
+	}
+}

@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"gopkg.in/yaml.v3"
 )
+
+var environmentReference = regexp.MustCompile(`\{env:([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // Config is owned by the relay operator, never by an agent process.
 type Config struct {
@@ -19,6 +23,7 @@ type Config struct {
 	Profiles  map[string]Profile  `yaml:"profiles"`
 	Users     map[string]User     `yaml:"users"`
 	Listen    Listen              `yaml:"listen"`
+	Logging   Logging             `yaml:"logging"`
 }
 
 type Provider struct {
@@ -28,9 +33,43 @@ type Provider struct {
 }
 
 type Server struct {
-	Address         string   `yaml:"address"`
-	Username        string   `yaml:"username"`
-	PasswordCommand []string `yaml:"password_command"`
+	Address  string   `yaml:"address"`
+	Username string   `yaml:"username"`
+	Password Password `yaml:"password"`
+}
+
+// Password accepts either a scalar value (usually ${ENVIRONMENT_VARIABLE})
+// or a command argument array. Command values are never passed through a shell.
+type Password struct {
+	Value   string
+	Command []string
+}
+
+func (p *Password) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		if node.Tag != "!!str" || node.Value == "" {
+			return errors.New("password must be a non-empty string or command array")
+		}
+		p.Value = node.Value
+		p.Command = nil
+		return nil
+	case yaml.SequenceNode:
+		var command []string
+		if err := node.Decode(&command); err != nil || len(command) == 0 || command[0] == "" {
+			return errors.New("password command must have a program name")
+		}
+		for _, argument := range command {
+			if argument == "" {
+				return errors.New("password command cannot contain empty arguments")
+			}
+		}
+		p.Command = command
+		p.Value = ""
+		return nil
+	default:
+		return errors.New("password must be a string or command array")
+	}
 }
 
 type Profile struct {
@@ -46,25 +85,76 @@ type Rules struct {
 }
 
 type ContentRule struct {
-	DeniedSubjects    []string `yaml:"denied_subjects"`
-	DeniedBodies      []string `yaml:"denied_bodies"`
-	DeniedExtensions  []string `yaml:"denied_extensions"`
-	DenyAttachments   bool     `yaml:"deny_attachments"`
-	MaxAttachmentSize int64    `yaml:"max_attachment_size"`
-	RemoveLinks       bool     `yaml:"remove_links"`
-	Scanner           []string `yaml:"scanner"`
+	DeniedSubjects []string        `yaml:"denied_subjects"`
+	DeniedBodies   []string        `yaml:"denied_bodies"`
+	RemoveLinks    bool            `yaml:"remove_links"`
+	Scanner        []string        `yaml:"scanner"`
+	Attachments    AttachmentRules `yaml:"attachments"`
+}
+
+// AttachmentRules is default-deny: an attachment must match allow and must
+// not match deny. Patterns are exact MIME types, * globs, or re: expressions.
+type AttachmentRules struct {
+	Allow []string `yaml:"allow"`
+	Deny  []string `yaml:"deny"`
+	Mode  string   `yaml:"mode"`
 }
 
 type User struct {
-	Provider        string   `yaml:"provider"`
-	Profile         string   `yaml:"profile"`
-	PasswordCommand []string `yaml:"password_command"`
-	TagSent         *bool    `yaml:"tag_sent"`
+	Provider  string   `yaml:"provider"`
+	Profile   string   `yaml:"profile"`
+	Password  Password `yaml:"password"`
+	TokenHash string   `yaml:"token_hash"`
+	TagSent   *bool    `yaml:"tag_sent"`
 }
 
 type Listen struct {
 	IMAP string `yaml:"imap"`
 	SMTP string `yaml:"smtp"`
+	MCP  string `yaml:"mcp"`
+}
+
+type Logging struct {
+	Level    string   `yaml:"level"`
+	Target   string   `yaml:"target"`
+	Rotation Rotation `yaml:"rotation"`
+	MCP      MCPLog   `yaml:"mcp"`
+}
+
+type Rotation struct {
+	RetentionDays int      `yaml:"retention_days"`
+	MaxFileSize   ByteSize `yaml:"max_file_size"`
+}
+
+// ByteSize accepts a byte count or a human-readable KiB, MiB, or GiB value.
+type ByteSize int64
+
+func (s *ByteSize) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.ScalarNode {
+		return errors.New("log file size must be a scalar")
+	}
+	value := strings.TrimSpace(node.Value)
+	if value == "" {
+		return errors.New("log file size cannot be empty")
+	}
+	multiplier := int64(1)
+	upper := strings.ToUpper(value)
+	for suffix, factor := range map[string]int64{"KIB": 1 << 10, "MIB": 1 << 20, "GIB": 1 << 30} {
+		if strings.HasSuffix(upper, suffix) {
+			value, multiplier = strings.TrimSpace(value[:len(value)-len(suffix)]), factor
+			break
+		}
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed < 0 || parsed > (1<<63-1)/multiplier {
+		return errors.New("invalid log file size")
+	}
+	*s = ByteSize(parsed * multiplier)
+	return nil
+}
+
+type MCPLog struct {
+	CaptureContent bool `yaml:"capture_content"`
 }
 
 func Load(path string) (*Config, []string, error) {
@@ -89,7 +179,14 @@ func Load(path string) (*Config, []string, error) {
 	if err := uniqueKeys(&node); err != nil {
 		return nil, nil, err
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(data))
+	if err := expandEnvironment(&node); err != nil {
+		return nil, nil, err
+	}
+	expanded, err := yaml.Marshal(&node)
+	if err != nil {
+		return nil, nil, err
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(expanded))
 	dec.KnownFields(true)
 	var cfg Config
 	if err := dec.Decode(&cfg); err != nil {
@@ -97,6 +194,32 @@ func Load(path string) (*Config, []string, error) {
 	}
 	warnings, err := cfg.Validate()
 	return &cfg, warnings, err
+}
+
+// expandEnvironment supports {env:NAME} in string values only. Config keys and
+// typed YAML values stay literal so interpolation cannot change its structure.
+func expandEnvironment(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
+		var missing string
+		node.Value = environmentReference.ReplaceAllStringFunc(node.Value, func(reference string) string {
+			name := environmentReference.FindStringSubmatch(reference)[1]
+			value, ok := os.LookupEnv(name)
+			if !ok {
+				missing = name
+				return reference
+			}
+			return value
+		})
+		if missing != "" {
+			return fmt.Errorf("environment variable %q is not set", missing)
+		}
+	}
+	for _, child := range node.Content {
+		if err := expandEnvironment(child); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func uniqueKeys(node *yaml.Node) error {
@@ -128,8 +251,8 @@ func (c *Config) Validate() ([]string, error) {
 			return nil, fmt.Errorf("provider %q needs an email address", name)
 		}
 		for _, srv := range []Server{p.IMAP, p.SMTP} {
-			if srv.Address == "" || srv.Username == "" || len(srv.PasswordCommand) == 0 || srv.PasswordCommand[0] == "" {
-				return nil, fmt.Errorf("provider %q needs IMAP and SMTP addresses, usernames, and password commands", name)
+			if srv.Address == "" || srv.Username == "" || (srv.Password.Value == "" && len(srv.Password.Command) == 0) {
+				return nil, fmt.Errorf("provider %q needs IMAP and SMTP addresses, usernames, and passwords", name)
 			}
 		}
 	}
@@ -143,8 +266,11 @@ func (c *Config) Validate() ([]string, error) {
 		if _, ok := c.Profiles[u.Profile]; !ok {
 			return nil, fmt.Errorf("user %q references unknown profile", name)
 		}
-		if len(u.PasswordCommand) == 0 || u.PasswordCommand[0] == "" {
-			return nil, fmt.Errorf("user %q needs a password command", name)
+		if u.Password.Value == "" && len(u.Password.Command) == 0 && u.TokenHash == "" {
+			return nil, fmt.Errorf("user %q needs a password or token_hash", name)
+		}
+		if u.TokenHash != "" && !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(u.TokenHash) {
+			return nil, fmt.Errorf("user %q has an invalid token_hash", name)
 		}
 	}
 	for name, profile := range c.Profiles {
@@ -172,9 +298,6 @@ func (c *Config) Validate() ([]string, error) {
 			}
 		}
 		for _, content := range []ContentRule{profile.Inbound, profile.Outbound} {
-			if content.MaxAttachmentSize < 0 {
-				return nil, fmt.Errorf("negative attachment size in profile %q", name)
-			}
 			for _, expr := range append(append([]string{}, content.DeniedSubjects...), content.DeniedBodies...) {
 				if len(expr) > 512 {
 					return nil, fmt.Errorf("oversized content rule in profile %q", name)
@@ -187,6 +310,19 @@ func (c *Config) Validate() ([]string, error) {
 			}
 			if len(content.Scanner) > 0 && content.Scanner[0] == "" {
 				return nil, fmt.Errorf("empty scanner command in profile %q", name)
+			}
+			for _, pattern := range append(append([]string{}, content.Attachments.Allow...), content.Attachments.Deny...) {
+				if len(pattern) == 0 || len(pattern) > 512 {
+					return nil, fmt.Errorf("invalid attachment MIME pattern in profile %q", name)
+				}
+				if strings.HasPrefix(pattern, "re:") {
+					if _, err := regexp.Compile(pattern[3:]); err != nil {
+						return nil, fmt.Errorf("invalid attachment MIME regex in profile %q: %w", name, err)
+					}
+				}
+			}
+			if mode := content.Attachments.Mode; mode != "" && mode != "reject" && mode != "remove" && mode != "silent-remove" {
+				return nil, fmt.Errorf("invalid attachment mode in profile %q", name)
 			}
 		}
 		for _, rule := range profile.Folders.Allow {
@@ -206,6 +342,23 @@ func (c *Config) Validate() ([]string, error) {
 		if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
 			return nil, fmt.Errorf("listener %q must bind loopback", addr)
 		}
+	}
+	if c.Listen.MCP != "" {
+		if _, _, err := net.SplitHostPort(c.Listen.MCP); err != nil {
+			return nil, fmt.Errorf("invalid MCP listener %q: %w", c.Listen.MCP, err)
+		}
+	}
+	if c.Logging.Level != "" && c.Logging.Level != "error" && c.Logging.Level != "warn" && c.Logging.Level != "info" && c.Logging.Level != "debug" {
+		return nil, fmt.Errorf("invalid logging level %q", c.Logging.Level)
+	}
+	if c.Logging.Target != "" && c.Logging.Target != "stdout" && !filepath.IsAbs(c.Logging.Target) {
+		return nil, errors.New("logging target must be stdout or an absolute path")
+	}
+	if c.Logging.MCP.CaptureContent && (c.Logging.Target == "" || c.Logging.Target == "stdout") {
+		return nil, errors.New("MCP content capture requires an owner-only file logging target")
+	}
+	if c.Logging.Rotation.RetentionDays < 0 || c.Logging.Rotation.MaxFileSize < 0 {
+		return nil, errors.New("logging rotation values cannot be negative")
 	}
 	return warnings, nil
 }

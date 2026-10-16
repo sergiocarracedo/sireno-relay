@@ -32,13 +32,16 @@ type Client interface {
 
 type Remote struct{}
 
-func Secret(ctx context.Context, command []string) (string, error) {
-	if len(command) == 0 || command[0] == "" {
-		return "", errors.New("missing secret command")
+func Secret(ctx context.Context, password config.Password) (string, error) {
+	if password.Value != "" {
+		return password.Value, nil
+	}
+	if len(password.Command) == 0 || password.Command[0] == "" {
+		return "", errors.New("missing password")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	cmd := exec.CommandContext(ctx, password.Command[0], password.Command[1:]...)
 	cmd.Stderr = io.Discard
 	var output bytes.Buffer
 	cmd.Stdout = &secretWriter{out: &output}
@@ -62,7 +65,7 @@ func (w *secretWriter) Write(p []byte) (int, error) {
 }
 
 func connect(ctx context.Context, srv config.Server) (*imapclient.Client, error) {
-	secret, err := Secret(ctx, srv.PasswordCommand)
+	secret, err := Secret(ctx, srv.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +152,7 @@ func (Remote) Messages(ctx context.Context, account config.Provider, folder stri
 }
 
 func (Remote) Send(ctx context.Context, account config.Provider, from string, recipients []string, message []byte) error {
-	password, err := Secret(ctx, account.SMTP.PasswordCommand)
+	password, err := Secret(ctx, account.SMTP.Password)
 	if err != nil {
 		return err
 	}

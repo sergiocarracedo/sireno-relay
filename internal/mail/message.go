@@ -3,32 +3,55 @@ package mail
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
+	"net/http"
 	"net/mail"
+	"net/textproto"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 )
 
-const MaxMessage = 4 << 20
+const MaxMessage = 16 << 20
+const MaxAttachment = 10 << 20
+const maxParts = 64
 
 var ErrDenied = errors.New("message denied by content policy")
 var link = regexp.MustCompile(`(?i)\b(?:https?://|www\.)[^\s<>"']+`)
+var htmlTag = regexp.MustCompile(`(?s)<[^>]*>`)
+
+const removedAttachmentNotice = "[One or more attachments were removed by Sireno security policy.]"
+
+type Attachment struct {
+	ID       uint32
+	Name     string
+	MIMEType string
+	Bytes    []byte
+}
 
 type Message struct {
-	Subject string
-	From    []string
-	To      []string
-	Cc      []string
-	Bcc     []string
-	Bytes   []byte
+	Subject            string
+	From               []string
+	To                 []string
+	Cc                 []string
+	Bcc                []string
+	Date               *time.Time
+	Body               string
+	Bytes              []byte
+	Attachments        []Attachment
+	RemovedAttachments bool
 }
 
 func addresses(h mail.Header, name string) ([]string, error) {
@@ -46,8 +69,8 @@ func addresses(h mail.Header, name string) ([]string, error) {
 	return result, nil
 }
 
-// Evaluate constructs the only bytes that may be exposed. Unsupported MIME is
-// denied rather than accidentally forwarding an uninspected alternative part.
+// Evaluate builds the only message representation exposed or submitted. MIME
+// parsing is recursive and bounded; an unreadable part denies the whole mail.
 func Evaluate(raw []byte, rule config.ContentRule) (*Message, error) {
 	if len(raw) > MaxMessage {
 		return nil, ErrDenied
@@ -56,7 +79,7 @@ func Evaluate(raw []byte, rule config.ContentRule) (*Message, error) {
 	if err != nil {
 		return nil, ErrDenied
 	}
-	var result Message
+	result := &Message{}
 	if result.Subject, err = (&mime.WordDecoder{}).DecodeHeader(parsed.Header.Get("Subject")); err != nil {
 		return nil, ErrDenied
 	}
@@ -64,70 +87,249 @@ func Evaluate(raw []byte, rule config.ContentRule) (*Message, error) {
 		name string
 		dest *[]string
 	}{{"From", &result.From}, {"To", &result.To}, {"Cc", &result.Cc}, {"Bcc", &result.Bcc}} {
-		*item.dest, err = addresses(parsed.Header, item.name)
-		if err != nil {
+		if *item.dest, err = addresses(parsed.Header, item.name); err != nil {
 			return nil, ErrDenied
 		}
 	}
-	contentType := parsed.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "text/plain"
+	if value := parsed.Header.Get("Date"); value != "" {
+		if date, dateErr := mail.ParseDate(value); dateErr == nil {
+			date = date.UTC()
+			result.Date = &date
+		}
 	}
-	mediaType, params, err := mime.ParseMediaType(contentType)
-	if err != nil || !strings.EqualFold(mediaType, "text/plain") || (params["charset"] != "" && !strings.EqualFold(params["charset"], "us-ascii") && !strings.EqualFold(params["charset"], "utf-8")) {
+	var plain, html string
+	parts := 0
+	if err := inspect(parsed.Header, parsed.Body, rule, result, &plain, &html, &parts, 0); err != nil {
 		return nil, ErrDenied
 	}
-	encoding := strings.ToLower(parsed.Header.Get("Content-Transfer-Encoding"))
-	if encoding != "" && encoding != "7bit" && encoding != "8bit" {
-		return nil, ErrDenied
+	body := plain
+	if body == "" {
+		body = htmlToText(html)
 	}
-	if parsed.Header.Get("Content-Disposition") != "" || parsed.Header.Get("Content-Location") != "" || parsed.Header.Get("Content-ID") != "" {
-		return nil, ErrDenied
+	if result.RemovedAttachments && rule.Attachments.Mode != "silent-remove" {
+		if body != "" {
+			body += "\n\n"
+		}
+		body += removedAttachmentNotice
 	}
-	if rule.DenyAttachments || len(rule.DeniedExtensions) > 0 || rule.MaxAttachmentSize > 0 {
-		// All attachments are denied by the supported plain-text MIME subset.
-	}
-	body, err := io.ReadAll(io.LimitReader(parsed.Body, MaxMessage+1))
-	if err != nil || len(body) > MaxMessage {
+	if body == "" && len(result.Attachments) == 0 {
 		return nil, ErrDenied
 	}
 	for _, pattern := range rule.DeniedSubjects {
-		matched, err := matches(pattern, result.Subject)
-		if err != nil || matched {
+		if matched, e := matches(pattern, result.Subject); e != nil || matched {
 			return nil, ErrDenied
 		}
 	}
 	for _, pattern := range rule.DeniedBodies {
-		matched, err := matches(pattern, string(body))
-		if err != nil || matched {
+		if matched, e := matches(pattern, body); e != nil || matched {
 			return nil, ErrDenied
 		}
 	}
-	if len(rule.Scanner) > 0 {
-		if err := scan(rule.Scanner, append([]byte(result.Subject+"\n"), body...)); err != nil {
-			return nil, ErrDenied
-		}
+	if len(rule.Scanner) > 0 && scan(rule.Scanner, []byte(result.Subject+"\n"+body)) != nil {
+		return nil, ErrDenied
 	}
 	if rule.RemoveLinks {
 		result.Subject = link.ReplaceAllString(result.Subject, "[link removed]")
-		body = []byte(link.ReplaceAllString(string(body), "[link removed]"))
+		body = link.ReplaceAllString(body, "[link removed]")
 	}
-	// Rebuild with an allowlist: unchecked Received, List-Unsubscribe, and
-	// Content-* headers may contain links or secrets.
+	result.Body = body
+	result.Bytes = rebuild(result, body)
+	return result, nil
+}
+
+func inspect(header mail.Header, source io.Reader, rule config.ContentRule, result *Message, plain, html *string, count *int, depth int) error {
+	if depth > 8 {
+		return ErrDenied
+	}
+	*count++
+	if *count > maxParts {
+		return ErrDenied
+	}
+	contentType := header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "text/plain; charset=us-ascii"
+	}
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return ErrDenied
+	}
+	mediaType = strings.ToLower(mediaType)
+	if strings.HasPrefix(mediaType, "multipart/") {
+		if encoding := strings.ToLower(strings.TrimSpace(header.Get("Content-Transfer-Encoding"))); encoding != "" && encoding != "7bit" && encoding != "8bit" {
+			return ErrDenied
+		}
+		boundary := params["boundary"]
+		if boundary == "" {
+			return ErrDenied
+		}
+		reader := multipart.NewReader(source, boundary)
+		for {
+			part, e := reader.NextPart()
+			if errors.Is(e, io.EOF) {
+				return nil
+			}
+			if e != nil {
+				return ErrDenied
+			}
+			if e := inspect(mail.Header(part.Header), part, rule, result, plain, html, count, depth+1); e != nil {
+				return e
+			}
+		}
+	}
+	data, err := decode(source, header.Get("Content-Transfer-Encoding"))
+	if err != nil {
+		return ErrDenied
+	}
+	disposition, dispParams := "", map[string]string{}
+	if value := header.Get("Content-Disposition"); value != "" {
+		var err error
+		disposition, dispParams, err = mime.ParseMediaType(value)
+		if err != nil {
+			return ErrDenied
+		}
+	}
+	isAttachment := strings.EqualFold(disposition, "attachment") || dispParams["filename"] != "" || mediaType == "application/pdf" || strings.HasPrefix(mediaType, "image/") || header.Get("Content-ID") != ""
+	if isAttachment {
+		if len(data) == 0 || len(data) > MaxAttachment || !attachmentAllowed(mediaType, data, rule.Attachments) {
+			if rule.Attachments.Mode == "reject" {
+				return ErrDenied
+			}
+			result.RemovedAttachments = true
+			return nil
+		}
+		name := dispParams["filename"]
+		if name == "" {
+			name = params["name"]
+		}
+		result.Attachments = append(result.Attachments, Attachment{ID: uint32(len(result.Attachments) + 1), Name: attachmentName(name), MIMEType: mediaType, Bytes: data})
+		return nil
+	}
+	charset := strings.ToLower(params["charset"])
+	if charset != "" && charset != "utf-8" && charset != "us-ascii" {
+		return ErrDenied
+	}
+	switch mediaType {
+	case "text/plain":
+		if *plain == "" {
+			*plain = string(data)
+		}
+	case "text/html":
+		if *html == "" {
+			*html = string(data)
+		}
+	default:
+		return ErrDenied
+	}
+	return nil
+}
+
+func attachmentName(value string) string {
+	value = filepath.Base(strings.ReplaceAll(value, "\\", "/"))
+	value = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, value)
+	value = strings.TrimSpace(value)
+	if len(value) > 255 {
+		value = value[:255]
+	}
+	if value == "" {
+		return "attachment"
+	}
+	return value
+}
+
+func decode(source io.Reader, encoding string) ([]byte, error) {
+	var reader io.Reader = source
+	switch strings.ToLower(strings.TrimSpace(encoding)) {
+	case "", "7bit", "8bit":
+	case "base64":
+		reader = base64.NewDecoder(base64.StdEncoding, source)
+	case "quoted-printable":
+		reader = quotedprintable.NewReader(source)
+	default:
+		return nil, ErrDenied
+	}
+	data, err := io.ReadAll(io.LimitReader(reader, MaxMessage+1))
+	if err != nil || len(data) > MaxMessage {
+		return nil, ErrDenied
+	}
+	return data, nil
+}
+
+func attachmentAllowed(declared string, data []byte, rules config.AttachmentRules) bool {
+	detected, _, _ := mime.ParseMediaType(http.DetectContentType(data))
+	if !strings.EqualFold(declared, detected) {
+		return false
+	}
+	for _, pattern := range rules.Deny {
+		if mimeMatches(pattern, declared) {
+			return false
+		}
+	}
+	for _, pattern := range rules.Allow {
+		if mimeMatches(pattern, declared) {
+			return true
+		}
+	}
+	return false
+}
+
+func mimeMatches(pattern, value string) bool {
+	if strings.HasPrefix(pattern, "re:") {
+		re, err := regexp.Compile(pattern[3:])
+		return err == nil && re.MatchString(value)
+	}
+	quoted := regexp.QuoteMeta(strings.ToLower(pattern))
+	return regexp.MustCompile("^" + strings.ReplaceAll(quoted, "\\*", ".*") + "$").MatchString(strings.ToLower(value))
+}
+
+func htmlToText(value string) string {
+	value = htmlTag.ReplaceAllString(value, " ")
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && r != '\n' && r != '\t' {
+			return ' '
+		}
+		return r
+	}, value))
+}
+
+func rebuild(message *Message, body string) []byte {
 	var out bytes.Buffer
 	for _, header := range []struct {
 		name   string
 		values []string
-	}{{"From", result.From}, {"To", result.To}, {"Cc", result.Cc}} {
+	}{{"From", message.From}, {"To", message.To}, {"Cc", message.Cc}} {
 		if len(header.values) > 0 {
 			fmt.Fprintf(&out, "%s: %s\r\n", header.name, strings.Join(header.values, ", "))
 		}
 	}
-	fmt.Fprintf(&out, "Subject: %s\r\n", result.Subject)
+	fmt.Fprintf(&out, "Subject: %s\r\n", message.Subject)
+	if len(message.Attachments) > 0 {
+		var bodyOut bytes.Buffer
+		writer := multipart.NewWriter(&bodyOut)
+		fmt.Fprintf(&out, "Content-Type: multipart/mixed; boundary=%q\r\n\r\n", writer.Boundary())
+		part, _ := writer.CreatePart(textproto.MIMEHeader{"Content-Type": {"text/plain; charset=utf-8"}})
+		_, _ = io.WriteString(part, body)
+		for _, attachment := range message.Attachments {
+			part, _ = writer.CreatePart(textproto.MIMEHeader{
+				"Content-Type":              {attachment.MIMEType},
+				"Content-Disposition":       {"attachment"},
+				"Content-Transfer-Encoding": {"base64"},
+			})
+			encoder := base64.NewEncoder(base64.StdEncoding, part)
+			_, _ = encoder.Write(attachment.Bytes)
+			_ = encoder.Close()
+		}
+		_ = writer.Close()
+		out.Write(bodyOut.Bytes())
+		return out.Bytes()
+	}
 	out.WriteString("Content-Type: text/plain; charset=utf-8\r\n\r\n")
-	out.Write(body)
-	result.Bytes = out.Bytes()
-	return &result, nil
+	out.WriteString(body)
+	return out.Bytes()
 }
 
 func matches(pattern, value string) (bool, error) {
@@ -139,9 +341,6 @@ func matches(pattern, value string) (bool, error) {
 		return re.MatchString(value), nil
 	}
 	parts := strings.Split(pattern, "*")
-	if len(parts) == 1 {
-		return strings.Contains(strings.ToLower(value), strings.ToLower(pattern)), nil
-	}
 	var b strings.Builder
 	for i, part := range parts {
 		if i > 0 {
@@ -153,8 +352,6 @@ func matches(pattern, value string) (bool, error) {
 	return re.MatchString(value), nil
 }
 
-// A scanner reports JSON {"status":"clean"} or {"status":"finding"} and
-// must exit successfully. Anything else is an inspection failure.
 func scan(command []string, input []byte) error {
 	if len(command) == 0 || command[0] == "" {
 		return ErrDenied

@@ -5,11 +5,11 @@ providers:
     imap:
       address: imap.example.org:993
       username: owner@example.org
-      password_command: [pass, show, mail/imap]
+      password: "{env:SIRENO_IMAP_PASSWORD}"
     smtp:
       address: smtp.example.org:465
       username: owner@example.org
-      password_command: [pass, show, mail/smtp]
+      password: "{env:SIRENO_SMTP_PASSWORD}"
 
 profiles:
   invoices:
@@ -24,17 +24,41 @@ profiles:
       # Optional. It must read bounded message text from stdin and write only:
       # {"status":"clean"} or {"status":"finding"}. Any other result hides mail.
       # scanner: [sireno-gitleaks-scanner]
+      # Attachments are denied unless an allow pattern matches their declared
+      # and detected MIME type. `*` is a wildcard and `re:` accepts Go regex.
+      attachments:
+        allow: ["application/pdf", "image/jpeg", "image/png"]
+        deny: ["application/zip"]
+        # reject hides inbound mail or rejects outbound mail. remove adds a
+        # fixed notice; silent-remove only removes the attachment. Omitted
+        # defaults to remove.
+        mode: remove
     outbound:
       denied_bodies: ["re:(?i)private key"]
+      attachments:
+        allow: ["application/pdf"]
+        mode: reject
 
 users:
   hermes-agent:
     provider: personal
     profile: invoices
-    password_command: [pass, show, agents/hermes]
+    # SHA-256 hash of the bearer token given to this agent. Generate the
+    # token outside this file and store only its hash here.
+    token_hash: 1df4b07d05b9b3b1115b4b6b22af319a2f99564a2fa2573a34896063c7513c10
     # Defaults to true. Set false to opt out of X-Sireno-Agent on sent mail.
     tag_sent: true
 
 listen:
-  imap: 127.0.0.1:1143
-  smtp: 127.0.0.1:1025
+  mcp: 127.0.0.1:8080
+
+# MCP audit logs are JSON lines. Content capture is disabled unless explicitly
+# enabled, and then requires an owner-only file target (never stdout).
+logging:
+  level: info
+  target: /var/log/sireno-relay/audit.jsonl
+  rotation:
+    retention_days: 7
+    max_file_size: 100MiB
+  mcp:
+    capture_content: false

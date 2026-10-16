@@ -157,6 +157,7 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 	}
 	name := string(key)
 	state := s.Store.states[name]
+	created := state == nil
 	if state == nil {
 		var value [4]byte
 		if _, err := rand.Read(value[:]); err != nil {
@@ -185,9 +186,23 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 	result.UIDNext = next.Next
 	sort.Slice(result.Messages, func(i, j int) bool { return result.Messages[i].UID < result.Messages[j].UID })
 	s.Store.states[name] = next
-	if err := s.Store.save(); err != nil {
-		s.Store.states[name] = state
-		return nil, err
+	if !sameState(state, next) || created {
+		if err := s.Store.save(); err != nil {
+			s.Store.states[name] = state
+			return nil, err
+		}
 	}
 	return result, nil
+}
+
+func sameState(a, b *idState) bool {
+	if a == nil || b == nil || a.UIDValidity != b.UIDValidity || a.Next != b.Next || len(a.Visible) != len(b.Visible) {
+		return false
+	}
+	for key, uid := range a.Visible {
+		if b.Visible[key] != uid {
+			return false
+		}
+	}
+	return true
 }
