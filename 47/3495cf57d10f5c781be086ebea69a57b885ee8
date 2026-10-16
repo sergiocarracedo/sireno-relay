@@ -1,0 +1,16 @@
+internal/provider/himalaya.go
+  h_f90ee31b03fc41 1-46
+internal/provider/himalaya_test.go
+  h_f90ee31b03fc41 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "473495cf57d10f5c781be086ebea69a57b885ee8",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
