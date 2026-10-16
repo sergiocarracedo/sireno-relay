@@ -1,0 +1,26 @@
+internal/mcp/server.go
+  h_f90ee31b03fc41 14,35,152-158,226-275
+internal/mcp/server_test.go
+  h_f90ee31b03fc41 14,36-49,149-182
+internal/provider/provider.go
+  h_f90ee31b03fc41 22-25,34-39,153,181-206
+internal/relay/relay.go
+  h_f90ee31b03fc41 12,209-263
+internal/relay/relay_test.go
+  h_f90ee31b03fc41 12,24-33,37-38,46-54,125-159
+internal/view/view.go
+  h_f90ee31b03fc41 31-35,39-42,162-171,173-175,178-181,183-184,209-220,222
+internal/view/view_test.go
+  h_f90ee31b03fc41 39-40,59,77-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "88ec24afe1d898dda385daf5d32e5d29da158cb4",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
