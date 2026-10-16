@@ -1,0 +1,6 @@
+# Owner configuration and runtime state may contain account-specific metadata.
+config.yml
+sireno-state.json
+
+# Local build output.
+bin/
