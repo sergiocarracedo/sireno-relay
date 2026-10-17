@@ -3,9 +3,11 @@ package mcp
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -16,6 +18,7 @@ import (
 
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/view"
@@ -119,28 +122,28 @@ type cursorStore struct {
 }
 
 type cursor struct {
-	user, provider, folder, query string
-	page                          uint32
-	expires                       time.Time
+	user, provider, binding, folder, query string
+	page, offset                           uint32
+	expires                                time.Time
 }
 
 func newCursorStore() *cursorStore { return &cursorStore{cursors: make(map[string]cursor)} }
 
-func (s *cursorStore) page(identity *relay.Identity, folder, query, token string) (uint32, error) {
+func (s *cursorStore) page(identity *relay.Identity, folder, query, token string) (uint32, uint32, error) {
 	if token == "" {
-		return 1, nil
+		return 1, 0, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	value, ok := s.cursors[token]
 	delete(s.cursors, token)
-	if !ok || time.Now().After(value.expires) || value.user != identity.Name || value.provider != identity.AccountName || value.folder != folder || value.query != query || value.page == 0 {
-		return 0, errors.New("mailbox unavailable")
+	if !ok || time.Now().After(value.expires) || value.user != identity.Name || value.provider != identity.AccountName || value.binding != bindingFingerprint(identity) || value.folder != folder || value.query != query || value.page == 0 {
+		return 0, 0, errors.New("mailbox unavailable")
 	}
-	return value.page, nil
+	return value.page, value.offset, nil
 }
 
-func (s *cursorStore) next(identity *relay.Identity, folder, query string, page uint32) (string, error) {
+func (s *cursorStore) next(identity *relay.Identity, folder, query string, page, offset uint32) (string, error) {
 	var bytes [24]byte
 	if _, err := rand.Read(bytes[:]); err != nil {
 		return "", err
@@ -148,8 +151,18 @@ func (s *cursorStore) next(identity *relay.Identity, folder, query string, page 
 	token := base64.RawURLEncoding.EncodeToString(bytes[:])
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cursors[token] = cursor{user: identity.Name, provider: identity.AccountName, folder: folder, query: query, page: page, expires: time.Now().Add(5 * time.Minute)}
+	s.cursors[token] = cursor{user: identity.Name, provider: identity.AccountName, binding: bindingFingerprint(identity), folder: folder, query: query, page: page, offset: offset, expires: time.Now().Add(5 * time.Minute)}
 	return token, nil
+}
+
+func bindingFingerprint(identity *relay.Identity) string {
+	data, _ := json.Marshal(struct {
+		Account config.Provider
+		Profile config.Profile
+		Token   string
+	}{identity.Account, identity.Profile, identity.TokenHash})
+	digest := sha256.Sum256(data)
+	return fmt.Sprintf("%x", digest)
 }
 
 type envelope struct {
@@ -220,42 +233,65 @@ func messagesWithCursors(r *relay.Relay, cursors *cursorStore) func(context.Cont
 		if identity == nil || args.Folder == "" || len(args.Query) > 512 || strings.ContainsAny(args.Query, "\r\n\x00") {
 			return nil, nil, errors.New("mailbox unavailable")
 		}
-		page, err := cursors.page(identity, args.Folder, args.Query, args.Cursor)
+		page, offset, err := cursors.page(identity, args.Folder, args.Query, args.Cursor)
 		if err != nil {
 			return nil, nil, errors.New("mailbox unavailable")
 		}
-		snapshot, hasMore, err := r.Page(ctx, identity, args.Folder, page, args.Query)
-		if err != nil {
-			if errors.Is(err, provider.ErrCapacityUnavailable) {
-				return nil, nil, provider.ErrCapacityUnavailable
+		items := make([]envelope, 0, 20)
+		var nextPage, nextOffset uint32
+		for scanned := 0; scanned < 50; scanned++ {
+			snapshot, hasMore, err := r.Page(ctx, identity, args.Folder, page, args.Query)
+			if err != nil {
+				if errors.Is(err, provider.ErrCapacityUnavailable) {
+					return nil, nil, provider.ErrCapacityUnavailable
+				}
+				return nil, nil, errors.New("mailbox unavailable")
 			}
-			return nil, nil, errors.New("mailbox unavailable")
-		}
-		items := make([]envelope, 0, min(len(snapshot.Messages), 20))
-		for _, message := range snapshot.Messages {
-			if len(items) == 20 {
+			if offset > uint32(len(snapshot.Messages)) {
+				return nil, nil, errors.New("mailbox unavailable")
+			}
+			for i := offset; i < uint32(len(snapshot.Messages)); i++ {
+				items = append(items, envelopeFromMessage(snapshot.Messages[i]))
+				if len(items) == 20 {
+					if i+1 < uint32(len(snapshot.Messages)) {
+						nextPage, nextOffset = page, i+1
+					} else if hasMore {
+						nextPage = page + 1
+					}
+					break
+				}
+			}
+			if len(items) == 20 || !hasMore {
 				break
 			}
-			item := envelope{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc}
-			if message.Mail.Date != nil {
-				item.Date = message.Mail.Date.Format(time.RFC3339)
+			page++
+			offset = 0
+			if scanned == 49 {
+				return nil, nil, errors.New("mailbox unavailable")
 			}
-			for _, attachment := range message.Mail.Attachments {
-				item.Attachments = append(item.Attachments, attachmentSummary{Name: attachment.Name, MIMEType: attachment.MIMEType, Size: len(attachment.Bytes)})
-			}
-			items = append(items, item)
 		}
-		data, _ := json.Marshal(items)
 		result := map[string]any{"messages": items}
-		if hasMore {
-			next, err := cursors.next(identity, args.Folder, args.Query, page+1)
+		if nextPage != 0 {
+			next, err := cursors.next(identity, args.Folder, args.Query, nextPage, nextOffset)
 			if err != nil {
 				return nil, nil, errors.New("mailbox unavailable")
 			}
 			result["next_cursor"] = next
 		}
+		data, _ := json.Marshal(result)
 		return &gomcp.CallToolResult{Content: []gomcp.Content{&gomcp.TextContent{Text: string(data)}}, StructuredContent: result}, result, nil
 	}
+}
+
+func envelopeFromMessage(message view.Message) envelope {
+	item := envelope{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc}
+	if message.Mail.Date != nil {
+		item.Date = message.Mail.Date.Format(time.RFC3339)
+	}
+	for _, attachment := range message.Mail.Attachments {
+		item.Attachments = append(item.Attachments, attachmentSummary{Name: attachment.Name, MIMEType: attachment.MIMEType, Size: len(attachment.Bytes)})
+	}
+	return item
 }
 
 func searchMessages(r *relay.Relay, cursors *cursorStore) func(context.Context, *gomcp.CallToolRequest, listMessagesArgs) (*gomcp.CallToolResult, any, error) {
