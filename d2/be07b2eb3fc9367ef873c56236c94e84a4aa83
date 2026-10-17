@@ -1,0 +1,44 @@
+README.md
+  h_f90ee31b03fc41 3,5,28-31,33-37,47,78,82
+cmd/sireno/main.go
+  h_f90ee31b03fc41 81,244
+cmd/sireno/main_test.go
+  h_f90ee31b03fc41 12,25,42
+docs/configuration.md
+  h_f90ee31b03fc41 46-47
+docs/security.md
+  h_f90ee31b03fc41 5,7-8
+internal/config/config.go
+  h_f90ee31b03fc41 104-107,111,256,267-268,273-278,338-339,341,344
+internal/config/config_test.go
+  h_f90ee31b03fc41 4-5,12-13,26-27,51,53-54,66,73-83,105,114
+internal/mcp/server.go
+  h_f90ee31b03fc41 5-6,14,19,34,36-37,40,112-152,199-205,214-217,220,223,227-234,236-238,250-256,261-270,279-281,304-306,317-342,358-360,367,370,372,374,378,382-383,421-423
+internal/mcp/server_test.go
+  h_f90ee31b03fc41 22-24,38,46-91,229-359
+internal/provider/himalaya.go
+  h_f90ee31b03fc41 4,6-7,9,11,14-15,20-221,227-230,247-250
+internal/provider/himalaya_test.go
+  h_f90ee31b03fc41 5,14-44,49,70-71,82-154
+internal/provider/provider.go
+  h_f90ee31b03fc41 1-2,17-54,56-75,78-80,82,88-89,91,94-106
+internal/relay/relay.go
+  h_f90ee31b03fc41 32,54,86-88,108-117,151-171,175,192-194,219-221,229-230,237-239,241,262-265,271-272,275-276,290
+internal/relay/relay_test.go
+  h_f90ee31b03fc41 27-30,34-36,47,49-51,57,67-68,78,141,152,155,193-223
+internal/view/view.go
+  h_f90ee31b03fc41 23-26,30-34,38-41,111-150,152-154,172-174,196-199,210,212,215,218,221-222,226,229-233,235,246,260,269,273
+internal/view/view_test.go
+  h_f90ee31b03fc41 15-17,41-42,61,92,100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d2be07b2eb3fc9367ef873c56236c94e84a4aa83",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
