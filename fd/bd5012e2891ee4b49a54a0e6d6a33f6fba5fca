@@ -1,0 +1,20 @@
+.githooks/pre-commit
+  h_f90ee31b03fc41 1-4
+.github/workflows/ci.yml
+  h_f90ee31b03fc41 1-27
+Makefile
+  h_f90ee31b03fc41 6,11-13,20-23
+README.md
+  h_f90ee31b03fc41 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fdbd5012e2891ee4b49a54a0e6d6a33f6fba5fca",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
