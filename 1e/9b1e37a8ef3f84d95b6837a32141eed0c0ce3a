@@ -1,0 +1,14 @@
+internal/provider/fixture/fixture.go
+  h_f90ee31b03fc41 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1e9b1e37a8ef3f84d95b6837a32141eed0c0ce3a",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
