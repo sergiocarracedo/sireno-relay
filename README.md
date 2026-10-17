@@ -75,7 +75,7 @@ sireno-relay completion bash > "$(brew --prefix)/etc/bash_completion.d/sireno-re
 sireno-relay version
 ```
 
-For source builds, use `make build`, `make test`, `make vet`, `make check`, or `make install`. The build embeds the current Git version in `sireno-relay version`; release builds can override it with `make build VERSION=v1.2.3`.
+For source builds, use `make build`, `make test`, `make vet`, `make check`, or `make install`. Run `make hooks` once after cloning to enable the repository's pre-commit quality gate. The build embeds the current Git version in `sireno-relay version`; release builds can override it with `make build VERSION=v1.2.3`.
 
 CLI flags can also be supplied as `SIRENO_*` environment variables when a command defines the matching flag: for example, `SIRENO_CONFIG=/secure/sireno.yml sireno-relay config-check` or `SIRENO_IMAP=127.0.0.1:1143 sireno-relay mail folders --user hermes-agent`. Relay policy and credentials always come only from the strictly validated YAML file.
 
