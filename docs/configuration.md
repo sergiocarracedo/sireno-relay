@@ -43,8 +43,8 @@ cp "$HOME/.config/sireno/config.yml" "$HOME/.config/sireno/config.yml.bak"
 | --- | --- | --- |
 | `providers` | Yes | Named owner mail accounts that agents can use through profiles. |
 | `profiles` | Yes | Named least-privilege policies, reusable by multiple agent users. |
-| `users` | Yes | Agent relay logins; each binds one provider to one profile. |
-| `listen.mcp` | No | Streamable HTTP MCP listener. Default while serving: `127.0.0.1:8080`; use a private container-network address for container deployment. |
+| `users` | Yes | Agent bearer-token bindings; each binds one provider to one profile. |
+| `listen.mcp` | No | Streamable HTTP MCP listener. Default while serving: `127.0.0.1:8080`; Sireno accepts loopback bindings only. |
 | `logging` | No | JSON operational/audit logging configuration. |
 
 All map keys are names you choose. Use stable, non-secret names such as `personal`, `invoice-bot`, and `invoices`.

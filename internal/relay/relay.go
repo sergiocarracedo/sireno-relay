@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/emersion/go-imap/v2"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/mail"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/policy"
@@ -30,7 +29,7 @@ type Identity struct {
 	Profile     config.Profile
 	Policy      *policy.Policy
 	TagSent     bool
-	Credential  config.Password
+	TokenHash   string
 }
 
 func (r *Relay) Identity(name string) (*Identity, error) {
@@ -52,23 +51,7 @@ func identityFromConfig(cfg *config.Config, name string) (*Identity, error) {
 		return nil, err
 	}
 	tag := u.TagSent == nil || *u.TagSent
-	return &Identity{Name: name, AccountName: u.Provider, Account: cfg.Providers[u.Provider], Profile: profile, Policy: p, TagSent: tag, Credential: u.Password}, nil
-}
-
-func (r *Relay) Authenticate(ctx context.Context, name, password string) (*Identity, error) {
-	cfg, _, err := config.Load(r.ConfigPath)
-	if err != nil {
-		return nil, errors.New("authentication failed")
-	}
-	u, ok := cfg.Users[name]
-	if !ok {
-		return nil, errors.New("authentication failed")
-	}
-	secret, err := provider.Secret(ctx, u.Password)
-	if err != nil || subtle.ConstantTimeCompare([]byte(secret), []byte(password)) != 1 {
-		return nil, errors.New("authentication failed")
-	}
-	return identityFromConfig(cfg, name)
+	return &Identity{Name: name, AccountName: u.Provider, Account: cfg.Providers[u.Provider], Profile: profile, Policy: p, TagSent: tag, TokenHash: u.TokenHash}, nil
 }
 
 // AuthenticateToken resolves a user only from an opaque bearer token. Tokens
@@ -100,6 +83,9 @@ func (r *Relay) Current(identity *Identity) (*Identity, error) {
 	if err != nil {
 		return nil, errors.New("policy unavailable")
 	}
+	if identity.TokenHash != "" && identity.TokenHash != current.TokenHash {
+		return nil, errors.New("policy unavailable")
+	}
 	return current, nil
 }
 
@@ -117,6 +103,16 @@ func (r *Relay) Snapshot(ctx context.Context, identity *Identity, folder string)
 		return nil, err
 	}
 	return (&view.Service{Provider: r.Provider, Store: r.Store}).Snapshot(ctx, current.Name, current.AccountName, folder, current.Account, current.Profile, current.Policy)
+}
+
+// Page returns a bounded filtered list/search page. page is internal relay
+// state; MCP callers receive an opaque cursor instead.
+func (r *Relay) Page(ctx context.Context, identity *Identity, folder string, page uint32, query string) (*view.Snapshot, bool, error) {
+	current, err := r.Current(identity)
+	if err != nil {
+		return nil, false, err
+	}
+	return (&view.Service{Provider: r.Provider, Store: r.Store}).Page(ctx, current.Name, current.AccountName, folder, current.Account, current.Profile, current.Policy, page, query)
 }
 
 // Attachment re-builds the filtered view before returning bytes, so an
@@ -152,17 +148,31 @@ func (r *Relay) Message(ctx context.Context, identity *Identity, folder string, 
 // Messages resolves a batch from one fresh filtered snapshot. This keeps a
 // batch internally consistent and avoids repeated upstream mailbox scans.
 func (r *Relay) Messages(ctx context.Context, identity *Identity, folder string, messageUIDs []uint32) ([]view.Message, error) {
-	snapshot, err := r.Snapshot(ctx, identity, folder)
-	if err != nil {
-		return nil, errors.New("message unavailable")
+	wanted := make(map[uint32]bool, len(messageUIDs))
+	for _, uid := range messageUIDs {
+		wanted[uid] = true
 	}
-	byUID := make(map[uint32]view.Message, len(snapshot.Messages))
-	for _, message := range snapshot.Messages {
-		byUID[message.UID] = message
+	found := make(map[uint32]view.Message, len(messageUIDs))
+	for page := uint32(1); page <= 100 && len(found) < len(wanted); page++ {
+		snapshot, hasMore, err := r.Page(ctx, identity, folder, page, "")
+		if err != nil {
+			if errors.Is(err, provider.ErrCapacityUnavailable) {
+				return nil, err
+			}
+			return nil, errors.New("message unavailable")
+		}
+		for _, message := range snapshot.Messages {
+			if wanted[message.UID] {
+				found[message.UID] = message
+			}
+		}
+		if !hasMore {
+			break
+		}
 	}
 	result := make([]view.Message, 0, len(messageUIDs))
 	for _, messageUID := range messageUIDs {
-		message, ok := byUID[messageUID]
+		message, ok := found[messageUID]
 		if !ok {
 			return nil, errors.New("message unavailable")
 		}
@@ -178,6 +188,9 @@ func (r *Relay) Send(ctx context.Context, identity *Identity, from string, recip
 	}
 	if !strings.EqualFold(from, current.Account.Address) || len(recipients) == 0 {
 		return mail.ErrDenied
+	}
+	if err := provider.Supports(ctx, r.Provider, current.Account, provider.CapacitySend); err != nil {
+		return err
 	}
 	message, err := mail.Evaluate(raw, current.Profile.Outbound)
 	if err != nil {
@@ -203,6 +216,9 @@ func (r *Relay) Send(ctx context.Context, identity *Identity, from string, recip
 	if err != nil || !samePolicy(current, latest) {
 		return errors.New("policy changed; retry submission")
 	}
+	if err := provider.Supports(ctx, r.Provider, latest.Account, provider.CapacitySend); err != nil {
+		return err
+	}
 	return r.Provider.Send(ctx, latest.Account, from, recipients, data)
 }
 
@@ -210,16 +226,19 @@ func (r *Relay) Send(ctx context.Context, identity *Identity, from string, recip
 // message. It deliberately does not permit \Deleted or replacement flag sets:
 // deleting may require unsafe expunge behavior, and replacement can silently
 // discard flags an agent was not authorized to control.
-func (r *Relay) UpdateFlags(ctx context.Context, identity *Identity, folder string, messageUID uint32, flags []imap.Flag, op imap.StoreFlagsOp) error {
-	if folder == "" || messageUID == 0 || !safeFlagUpdate(flags, op) {
+func (r *Relay) UpdateFlags(ctx context.Context, identity *Identity, folder string, messageUID uint32, flags []provider.Flag, action provider.FlagAction) error {
+	if folder == "" || messageUID == 0 || !safeFlagUpdate(flags, action) {
 		return errors.New("message unavailable")
 	}
 	current, err := r.Current(identity)
 	if err != nil || !current.Policy.WriteFolder(folder) {
 		return errors.New("message unavailable")
 	}
+	if err := provider.Supports(ctx, r.Provider, current.Account, provider.CapacityUpdateFlags); err != nil {
+		return err
+	}
 	snapshot, err := (&view.Service{Provider: r.Provider, Store: r.Store}).Snapshot(ctx, current.Name, current.AccountName, folder, current.Account, current.Profile, current.Policy)
-	if err != nil || snapshot.UpstreamUIDValidity == 0 {
+	if err != nil || snapshot.UpstreamGeneration == "" {
 		return errors.New("message unavailable")
 	}
 	var target *view.Message
@@ -240,18 +259,21 @@ func (r *Relay) UpdateFlags(ctx context.Context, identity *Identity, folder stri
 	if !ok {
 		return errors.New("message update unavailable")
 	}
-	if err := store.StoreFlags(ctx, latest.Account, folder, target.UpstreamUID, snapshot.UpstreamUIDValidity, flags, op); err != nil {
+	if err := provider.Supports(ctx, r.Provider, latest.Account, provider.CapacityUpdateFlags); err != nil {
+		return err
+	}
+	if err := store.StoreFlags(ctx, latest.Account, folder, target.Upstream, flags, action); err != nil {
 		return errors.New("message update unavailable")
 	}
 	return nil
 }
 
-func safeFlagUpdate(flags []imap.Flag, op imap.StoreFlagsOp) bool {
-	if len(flags) == 0 || (op != imap.StoreFlagsAdd && op != imap.StoreFlagsDel) {
+func safeFlagUpdate(flags []provider.Flag, action provider.FlagAction) bool {
+	if len(flags) == 0 || (action != provider.FlagAdd && action != provider.FlagRemove) {
 		return false
 	}
-	allowed := map[imap.Flag]bool{imap.FlagSeen: true, imap.FlagFlagged: true, imap.FlagAnswered: true}
-	seen := make(map[imap.Flag]bool, len(flags))
+	allowed := map[provider.Flag]bool{provider.FlagSeen: true, provider.FlagFlagged: true, provider.FlagAnswered: true}
+	seen := make(map[provider.Flag]bool, len(flags))
 	for _, flag := range flags {
 		if !allowed[flag] || seen[flag] {
 			return false
@@ -265,5 +287,5 @@ func samePolicy(a, b *Identity) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.AccountName == b.AccountName && reflect.DeepEqual(a.Profile, b.Profile) && reflect.DeepEqual(a.Account, b.Account) && a.TagSent == b.TagSent && reflect.DeepEqual(a.Credential, b.Credential)
+	return a.AccountName == b.AccountName && reflect.DeepEqual(a.Profile, b.Profile) && reflect.DeepEqual(a.Account, b.Account) && a.TagSent == b.TagSent && a.TokenHash == b.TokenHash
 }

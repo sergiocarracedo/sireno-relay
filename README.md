@@ -1,8 +1,8 @@
 # Sireno AI Relay
 
-Sireno gives an agent a restricted, local IMAP/SMTP mailbox and a matching CLI. It is a deterministic access boundary: folders and messages denied by policy are absent from the agent's view, including lists, counts, searches, fetches, and virtual message IDs.
+Sireno gives an agent a restricted, token-authenticated MCP mail view. It is a deterministic access boundary: folders and messages denied by policy are absent from the agent's view, including virtual message IDs.
 
-> This is an early v1 implementation. It supports loopback-only IMAP/SMTP upstream accounts using password/app-password credentials. POP3, OAuth, remote clients, and non-email relays are intentionally out of scope.
+> This is an early v1 implementation. Himalaya is the only upstream provider and Sireno binds its MCP listener to loopback. POP3, OAuth, remote clients, and non-email relays are intentionally out of scope.
 
 ## Prerequisite: Himalaya
 
@@ -25,18 +25,16 @@ sireno-relay config-check --config config.yml
 sireno-relay serve --config config.yml
 ```
 
-In another terminal, give the agent only its relay password:
+Give the agent only the MCP endpoint and the bearer token whose SHA-256 hash is
+stored in its `users` entry. The agent calls the discovered MCP tools with
+`Authorization: Bearer <token>`; it never receives upstream credentials or an
+IMAP/SMTP endpoint.
 
-```sh
-export SIRENO_AGENT_PASSWORD="$(pass show agents/hermes)"
-sireno-relay mail folders --user hermes-agent
-sireno-relay mail list --user hermes-agent --folder INBOX/Invoices
-sireno-relay mail read --user hermes-agent --folder INBOX/Invoices --uid 1
-printf 'From: owner@example.org\r\nTo: accounting@example.org\r\nSubject: Invoice\r\n\r\nProcessed.' \
-  | sireno-relay mail send --user hermes-agent --from owner@example.org --to accounting@example.org
-```
-
-Mail clients can instead connect to `127.0.0.1:1143` (IMAP) and `127.0.0.1:1025` (SMTP) using the configured agent username and password.
+`list_messages` and `search_messages` return no more than 20 filtered
+messages and an opaque `next_cursor` when another candidate page may exist.
+`send_message` accepts only composed plain text; attachment uploads, moving,
+deleting, and folder changes remain unavailable until their provider behavior
+is proven target-scoped.
 
 ## Policy
 
@@ -46,7 +44,7 @@ Policy is explicit and default-deny. Rules use `mode:pattern`:
 - Exact names, `*` wildcards, and `re:<regular expression>` are supported.
 - A matching deny wins over every allow.
 - Folder read is always required. Address read is additionally required only when the profile configures address allow rules.
-- A send checks the SMTP envelope **and** message `To`, `Cc`, and `Bcc`; one denied recipient rejects the whole message before upstream submission.
+- A send checks the supplied envelope **and** message `To`, `Cc`, and `Bcc`; one denied recipient rejects the whole message before upstream submission.
 
 `ro:*` and `rw:*` trigger an owner warning. Folder `wo` rules are invalid. Bcc is evaluated on received messages only if it exists in stored headers.
 
@@ -77,10 +75,10 @@ sireno-relay version
 
 For source builds, use `make build`, `make test`, `make vet`, `make check`, or `make install`. Run `make hooks` once after cloning to enable the repository's pre-commit quality gate. The build embeds the current Git version in `sireno-relay version`; release builds can override it with `make build VERSION=v1.2.3`.
 
-CLI flags can also be supplied as `SIRENO_*` environment variables when a command defines the matching flag: for example, `SIRENO_CONFIG=/secure/sireno.yml sireno-relay config-check` or `SIRENO_IMAP=127.0.0.1:1143 sireno-relay mail folders --user hermes-agent`. Relay policy and credentials always come only from the strictly validated YAML file.
+CLI flags can also be supplied as `SIRENO_*` environment variables when a command defines the matching flag: for example, `SIRENO_CONFIG=/secure/sireno.yml sireno-relay config-check`. Relay policy and upstream credentials always come only from the strictly validated YAML file.
 
 ## Operations
 
-Run `sireno-relay serve` in the foreground for development; Ctrl+C closes both listeners. For a persistent installation, use the included user service example after installing a compiled binary. Do not bind to non-loopback addresses in v1.
+Run `sireno-relay serve` in the foreground for development; Ctrl+C closes the MCP listener. For a persistent installation, use the included user service example after installing a compiled binary. Do not bind to non-loopback addresses in v1.
 
 See `docs/configuration.md`, `docs/policy.md`, `docs/security.md`, and `docs/operations.md` for details.

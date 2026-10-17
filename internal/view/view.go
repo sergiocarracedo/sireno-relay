@@ -13,7 +13,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/emersion/go-imap/v2"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/mail"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/policy"
@@ -21,25 +20,25 @@ import (
 )
 
 type Message struct {
-	UID         uint32
-	UpstreamUID imap.UID // never expose to an agent
-	Mail        *mail.Message
-	Flags       []imap.Flag
+	UID      uint32
+	Upstream provider.Message // never expose upstream IDs to an agent
+	Mail     *mail.Message
+	Flags    []provider.Flag
 }
 
 type Snapshot struct {
-	Folder              string
-	UIDValidity         uint32
-	UpstreamUIDValidity uint32
-	UIDNext             uint32
-	Messages            []Message
+	Folder             string
+	UIDValidity        uint32
+	UpstreamGeneration string
+	UIDNext            uint32
+	Messages           []Message
 }
 
 type idState struct {
-	UIDValidity         uint32            `json:"uid_validity"`
-	UpstreamUIDValidity uint32            `json:"upstream_uid_validity"`
-	Next                uint32            `json:"next"`
-	Visible             map[string]uint32 `json:"visible"`
+	UIDValidity        uint32            `json:"uid_validity"`
+	UpstreamGeneration string            `json:"upstream_generation"`
+	Next               uint32            `json:"next"`
+	Visible            map[string]uint32 `json:"visible"`
 }
 
 type Store struct {
@@ -109,7 +108,50 @@ type Service struct {
 	Store    *Store
 }
 
+// Page builds one filtered virtual page from a bounded provider candidate page.
+// The boolean reports only whether another candidate page may exist; it never
+// represents a total message count.
+func (s *Service) Page(ctx context.Context, user, providerName, folder string, account config.Provider, profile config.Profile, p *policy.Policy, page uint32, query string) (*Snapshot, bool, error) {
+	if page == 0 || !p.ReadFolder(folder) {
+		return nil, false, errors.New("mailbox unavailable")
+	}
+	capacity := provider.CapacityList
+	if query != "" {
+		capacity = provider.CapacitySearch
+	}
+	if err := provider.Supports(ctx, s.Provider, account, capacity); err != nil {
+		return nil, false, err
+	}
+	reader, ok := s.Provider.(provider.PageReader)
+	if !ok {
+		if page != 1 || query != "" {
+			return nil, false, provider.ErrCapacityUnavailable
+		}
+		result, err := s.Snapshot(ctx, user, providerName, folder, account, profile, p)
+		return result, false, err
+	}
+	upstream, err := reader.Page(ctx, account, provider.PageRequest{Folder: folder, Page: page, PageSize: 20, Query: query})
+	if err != nil {
+		return nil, false, errors.New("mailbox unavailable")
+	}
+	wrapped := pagedClient{Client: s.Provider, messages: upstream.Messages}
+	result, err := (&Service{Provider: wrapped, Store: s.Store}).Snapshot(ctx, user, providerName, folder, account, profile, p)
+	return result, upstream.HasMore, err
+}
+
+type pagedClient struct {
+	provider.Client
+	messages []provider.Message
+}
+
+func (p pagedClient) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
+	return p.messages, nil
+}
+
 func (s *Service) Folders(ctx context.Context, account config.Provider, p *policy.Policy) ([]string, error) {
+	if err := provider.Supports(ctx, s.Provider, account, provider.CapacityFolders); err != nil {
+		return nil, err
+	}
 	folders, err := s.Provider.Folders(ctx, account)
 	if err != nil {
 		return nil, err
@@ -126,6 +168,9 @@ func (s *Service) Folders(ctx context.Context, account config.Provider, p *polic
 func (s *Service) Snapshot(ctx context.Context, user, providerName, folder string, account config.Provider, profile config.Profile, p *policy.Policy) (*Snapshot, error) {
 	if !p.ReadFolder(folder) {
 		return nil, errors.New("mailbox unavailable")
+	}
+	if err := provider.Supports(ctx, s.Provider, account, provider.CapacityList); err != nil {
+		return nil, err
 	}
 	items, err := s.Provider.Messages(ctx, account, folder)
 	if err != nil {
@@ -148,7 +193,10 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 			continue
 		}
 		digest := sha256.Sum256(item.Raw)
-		key := fmt.Sprintf("%d:%x", item.UID, digest)
+		if item.ID == "" || item.Generation == "" {
+			continue
+		}
+		key := fmt.Sprintf("%s:%s:%x", item.Generation, item.ID, digest)
 		candidates = append(candidates, candidate{key, item, parsed})
 	}
 	s.Store.mu.Lock()
@@ -159,29 +207,32 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 	}
 	name := string(key)
 	state := s.Store.states[name]
-	upstreamUIDValidity := uint32(0)
+	upstreamGeneration := ""
 	for _, item := range items {
-		if item.UIDValidity == 0 {
+		if item.Generation == "" {
 			continue
 		}
-		if upstreamUIDValidity != 0 && upstreamUIDValidity != item.UIDValidity {
+		if upstreamGeneration != "" && upstreamGeneration != item.Generation {
 			return nil, errors.New("mailbox unavailable")
 		}
-		upstreamUIDValidity = item.UIDValidity
+		upstreamGeneration = item.Generation
 	}
 	created := state == nil
-	if state == nil || (upstreamUIDValidity != 0 && state.UpstreamUIDValidity != 0 && state.UpstreamUIDValidity != upstreamUIDValidity) {
-		state, err = newIDState(upstreamUIDValidity)
+	if state == nil || (upstreamGeneration != "" && state.UpstreamGeneration != "" && state.UpstreamGeneration != upstreamGeneration) {
+		state, err = newIDState(upstreamGeneration)
 		if err != nil {
 			return nil, err
 		}
-	} else if upstreamUIDValidity != 0 && state.UpstreamUIDValidity == 0 {
+	} else if upstreamGeneration != "" && state.UpstreamGeneration == "" {
 		// State created before a mailbox had messages gains its upstream
 		// generation as soon as one becomes available.
-		state = &idState{UIDValidity: state.UIDValidity, UpstreamUIDValidity: upstreamUIDValidity, Next: state.Next, Visible: state.Visible}
+		state = &idState{UIDValidity: state.UIDValidity, UpstreamGeneration: upstreamGeneration, Next: state.Next, Visible: state.Visible}
 	}
-	next := &idState{UIDValidity: state.UIDValidity, UpstreamUIDValidity: state.UpstreamUIDValidity, Next: state.Next, Visible: make(map[string]uint32)}
-	result := &Snapshot{Folder: folder, UIDValidity: next.UIDValidity, UpstreamUIDValidity: next.UpstreamUIDValidity}
+	next := &idState{UIDValidity: state.UIDValidity, UpstreamGeneration: state.UpstreamGeneration, Next: state.Next, Visible: make(map[string]uint32, len(state.Visible)+len(candidates))}
+	for key, uid := range state.Visible {
+		next.Visible[key] = uid
+	}
+	result := &Snapshot{Folder: folder, UIDValidity: next.UIDValidity, UpstreamGeneration: next.UpstreamGeneration}
 	for _, candidate := range candidates {
 		uid, ok := state.Visible[candidate.key]
 		if !ok {
@@ -192,7 +243,7 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 			next.Next++
 		}
 		next.Visible[candidate.key] = uid
-		result.Messages = append(result.Messages, Message{UID: uid, UpstreamUID: candidate.item.UID, Mail: candidate.parsed, Flags: candidate.item.Flags})
+		result.Messages = append(result.Messages, Message{UID: uid, Upstream: candidate.item, Mail: candidate.parsed, Flags: candidate.item.Flags})
 	}
 	result.UIDNext = next.Next
 	sort.Slice(result.Messages, func(i, j int) bool { return result.Messages[i].UID < result.Messages[j].UID })
@@ -206,7 +257,7 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 	return result, nil
 }
 
-func newIDState(upstreamUIDValidity uint32) (*idState, error) {
+func newIDState(upstreamGeneration string) (*idState, error) {
 	var value [4]byte
 	if _, err := rand.Read(value[:]); err != nil {
 		return nil, err
@@ -215,11 +266,11 @@ func newIDState(upstreamUIDValidity uint32) (*idState, error) {
 	if validity == 0 {
 		validity = 1
 	}
-	return &idState{UIDValidity: validity, UpstreamUIDValidity: upstreamUIDValidity, Next: 1, Visible: make(map[string]uint32)}, nil
+	return &idState{UIDValidity: validity, UpstreamGeneration: upstreamGeneration, Next: 1, Visible: make(map[string]uint32)}, nil
 }
 
 func sameState(a, b *idState) bool {
-	if a == nil || b == nil || a.UIDValidity != b.UIDValidity || a.UpstreamUIDValidity != b.UpstreamUIDValidity || a.Next != b.Next || len(a.Visible) != len(b.Visible) {
+	if a == nil || b == nil || a.UIDValidity != b.UIDValidity || a.UpstreamGeneration != b.UpstreamGeneration || a.Next != b.Next || len(a.Visible) != len(b.Visible) {
 		return false
 	}
 	for key, uid := range a.Visible {

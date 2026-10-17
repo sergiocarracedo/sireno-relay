@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestConfigCheckAndAgentPassword(t *testing.T) {
+func TestConfigCheckRejectsRetiredAgentPassword(t *testing.T) {
 	previous := findExecutable
 	findExecutable = func(string) (string, error) { return "/usr/bin/himalaya", nil }
 	t.Cleanup(func() { findExecutable = previous })
@@ -22,7 +22,7 @@ func TestConfigCheckAndAgentPassword(t *testing.T) {
 profiles:
   bot: {folders: {allow: ["ro:INBOX"]}}
 users:
-  bot: {provider: home, profile: bot, password: [printf, secret]}
+  bot: {provider: home, profile: bot, token_hash: d7c5c19d04e1f02b9e21d9b8014758a148fa5bb4a6c3148d66566837dc3f3b98}
 `
 	if err := os.WriteFile(path, []byte(config), 0600); err != nil {
 		t.Fatal(err)
@@ -38,9 +38,8 @@ users:
 	if err := run([]string{"config-check"}, &out); err != nil {
 		t.Fatal(err)
 	}
-	os.Unsetenv("SIRENO_AGENT_PASSWORD")
 	if err := run([]string{"mail", "folders", "--user", "bot"}, &out); err == nil {
-		t.Fatal("missing agent password was accepted")
+		t.Fatal("retired direct mail command was accepted")
 	}
 }
 

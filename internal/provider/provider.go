@@ -1,43 +1,109 @@
+// Package provider defines the upstream mail boundary. Its types deliberately
+// avoid exposing protocol identifiers to the relay, policy, or MCP layers.
 package provider
 
 import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/emersion/go-imap/v2"
-	"github.com/emersion/go-imap/v2/imapclient"
-	"github.com/emersion/go-sasl"
-	smtp "github.com/emersion/go-smtp"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
-	"github.com/sergiocarracedo/sireno-ai-relay/internal/mail"
 )
 
+var ErrCapacityUnavailable = errors.New("capacity unavailable")
+
+// Capacity is an independently advertised upstream operation. A provider must
+// not claim a capacity merely because another backend can perform it.
+type Capacity string
+
+const (
+	CapacityFolders     Capacity = "folders"
+	CapacityList        Capacity = "list"
+	CapacitySearch      Capacity = "search"
+	CapacityRead        Capacity = "read"
+	CapacitySend        Capacity = "send"
+	CapacityUpdateFlags Capacity = "update_flags"
+)
+
+// Capabilities is the provider's per-account capability snapshot.
+type Capabilities map[Capacity]bool
+
+func (c Capabilities) Has(capacity Capacity) bool { return c[capacity] }
+
+// Flag and FlagAction are protocol-neutral values accepted by Sireno.
+type Flag string
+
+const (
+	FlagSeen     Flag = "seen"
+	FlagFlagged  Flag = "flagged"
+	FlagAnswered Flag = "answered"
+)
+
+type FlagAction string
+
+const (
+	FlagAdd    FlagAction = "add"
+	FlagRemove FlagAction = "remove"
+)
+
+// Message is raw upstream mail with opaque provider identifiers. ID and
+// Generation never cross the provider boundary to an agent.
 type Message struct {
-	UID         imap.UID
-	UIDValidity uint32
-	Raw         []byte
-	Flags       []imap.Flag
+	ID         string
+	Generation string
+	Raw        []byte
+	Flags      []Flag
 }
 
+// PageRequest contains only provider-neutral pagination/search input. Page is
+// one-based and is never exposed as an MCP cursor.
+type PageRequest struct {
+	Folder   string
+	Page     uint32
+	PageSize uint32
+	Query    string
+}
+
+// Page is a bounded upstream candidate page. HasMore deliberately carries no
+// total count so callers cannot expose hidden mailbox cardinality.
+type Page struct {
+	Messages []Message
+	HasMore  bool
+}
+
+// Client is intentionally small. All providers implement the same base read
+// and send operations, while a capacity advertises whether each is usable for
+// the current account. Optional operations have focused interfaces below.
 type Client interface {
+	Capabilities(context.Context, config.Provider) (Capabilities, error)
 	Folders(context.Context, config.Provider) ([]string, error)
 	Messages(context.Context, config.Provider, string) ([]Message, error)
 	Send(context.Context, config.Provider, string, []string, []byte) error
 }
 
-// FlagStore is an optional targeted mutation capability. Keeping it separate
-// from Client makes unsupported provider operations unavailable by default.
+// FlagStore performs one target-scoped flag operation. The relay supplies an
+// opaque target from a freshly filtered message and never an agent-supplied ID.
 type FlagStore interface {
-	StoreFlags(context.Context, config.Provider, string, imap.UID, uint32, []imap.Flag, imap.StoreFlagsOp) error
+	StoreFlags(context.Context, config.Provider, string, Message, []Flag, FlagAction) error
 }
 
-type Remote struct{}
+// PageReader is an optional focused capability so providers that cannot search
+// do not need to simulate search. The relay checks the declared capacity first.
+type PageReader interface {
+	Page(context.Context, config.Provider, PageRequest) (Page, error)
+}
+
+func Supports(ctx context.Context, client Client, account config.Provider, capacity Capacity) error {
+	capabilities, err := client.Capabilities(ctx, account)
+	if err != nil || !capabilities.Has(capacity) {
+		return ErrCapacityUnavailable
+	}
+	return nil
+}
 
 func Secret(ctx context.Context, password config.Password) (string, error) {
 	if password.Value != "" {
@@ -69,138 +135,4 @@ func (w *secretWriter) Write(p []byte) (int, error) {
 		return 0, errors.New("secret too long")
 	}
 	return w.out.Write(p)
-}
-
-func connect(ctx context.Context, srv config.Server) (*imapclient.Client, error) {
-	secret, err := Secret(ctx, srv.Password)
-	if err != nil {
-		return nil, err
-	}
-	client, err := imapclient.DialTLS(srv.Address, nil)
-	if err != nil {
-		return nil, err
-	}
-	if err := client.Login(srv.Username, secret).Wait(); err != nil {
-		client.Close()
-		return nil, errors.New("upstream IMAP authentication failed")
-	}
-	return client, nil
-}
-
-func (Remote) Folders(ctx context.Context, account config.Provider) ([]string, error) {
-	client, err := connect(ctx, account.IMAP)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	cmd := client.List("", "*", nil)
-	var folders []string
-	for m := cmd.Next(); m != nil; m = cmd.Next() {
-		folders = append(folders, m.Mailbox)
-	}
-	if err := cmd.Close(); err != nil {
-		return nil, err
-	}
-	return folders, nil
-}
-
-func (Remote) Messages(ctx context.Context, account config.Provider, folder string) ([]Message, error) {
-	client, err := connect(ctx, account.IMAP)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	selected, err := client.Select(folder, nil).Wait()
-	if err != nil {
-		return nil, err
-	}
-	if selected.NumMessages == 0 {
-		return nil, nil
-	}
-	var seq imap.SeqSet
-	seq.AddRange(1, selected.NumMessages)
-	cmd := client.Fetch(seq, &imap.FetchOptions{UID: true, Flags: true, BodySection: []*imap.FetchItemBodySection{{Peek: true}}, RFC822Size: true})
-	var messages []Message
-	for item := cmd.Next(); item != nil; item = cmd.Next() {
-		var uid imap.UID
-		var flags []imap.Flag
-		var raw []byte
-		var size int64
-		for part := item.Next(); part != nil; part = item.Next() {
-			switch v := part.(type) {
-			case imapclient.FetchItemDataUID:
-				uid = v.UID
-			case imapclient.FetchItemDataFlags:
-				flags = v.Flags
-			case imapclient.FetchItemDataRFC822Size:
-				size = v.Size
-			case imapclient.FetchItemDataBodySection:
-				if v.Literal == nil {
-					cmd.Close()
-					return nil, errors.New("upstream message has no body")
-				}
-				read, e := io.ReadAll(io.LimitReader(v.Literal, mail.MaxMessage+1))
-				if e != nil {
-					cmd.Close()
-					return nil, e
-				}
-				raw = read
-			}
-		}
-		if size > mail.MaxMessage || len(raw) > mail.MaxMessage || uid == 0 {
-			continue
-		}
-		messages = append(messages, Message{UID: uid, UIDValidity: selected.UIDValidity, Raw: raw, Flags: flags})
-	}
-	if err := cmd.Close(); err != nil {
-		return nil, err
-	}
-	return messages, nil
-}
-
-func (Remote) Send(ctx context.Context, account config.Provider, from string, recipients []string, message []byte) error {
-	password, err := Secret(ctx, account.SMTP.Password)
-	if err != nil {
-		return err
-	}
-	client, err := smtp.DialTLS(account.SMTP.Address, nil)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	client.CommandTimeout = 15 * time.Second
-	client.SubmissionTimeout = 30 * time.Second
-	if err := client.Auth(sasl.NewPlainClient("", account.SMTP.Username, password)); err != nil {
-		return errors.New("upstream SMTP authentication failed")
-	}
-	if err := client.SendMail(from, recipients, bytes.NewReader(message)); err != nil {
-		return fmt.Errorf("upstream SMTP submission failed (delivery status may be unknown): %w", err)
-	}
-	return nil
-}
-
-// StoreFlags changes flags for exactly one upstream UID. It selects and checks
-// the mailbox generation immediately before issuing the UID STORE command, so
-// a virtual ID from an earlier UIDVALIDITY generation cannot mutate new mail.
-func (Remote) StoreFlags(ctx context.Context, account config.Provider, folder string, uid imap.UID, uidValidity uint32, flags []imap.Flag, op imap.StoreFlagsOp) error {
-	if folder == "" || uid == 0 || uidValidity == 0 || len(flags) == 0 {
-		return errors.New("invalid flag update")
-	}
-	if op != imap.StoreFlagsAdd && op != imap.StoreFlagsDel {
-		return errors.New("unsupported flag update")
-	}
-	client, err := connect(ctx, account.IMAP)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	selected, err := client.Select(folder, nil).Wait()
-	if err != nil {
-		return err
-	}
-	if selected.UIDValidity != uidValidity {
-		return errors.New("mailbox changed")
-	}
-	command := client.Store(imap.UIDSetNum(uid), &imap.StoreFlags{Op: op, Silent: true, Flags: flags}, nil)
-	return command.Close()
 }

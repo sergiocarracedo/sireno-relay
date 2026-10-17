@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emersion/go-imap/v2"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/view"
@@ -25,14 +24,16 @@ type fake struct {
 	data     []byte
 	messages []provider.Message
 	stored   struct {
-		folder      string
-		uid         imap.UID
-		uidValidity uint32
-		flags       []imap.Flag
-		op          imap.StoreFlagsOp
+		folder string
+		target provider.Message
+		flags  []provider.Flag
+		action provider.FlagAction
 	}
 }
 
+func (*fake) Capabilities(context.Context, config.Provider) (provider.Capabilities, error) {
+	return provider.Capabilities{provider.CapacityFolders: true, provider.CapacityList: true, provider.CapacityRead: true, provider.CapacitySend: true, provider.CapacityUpdateFlags: true}, nil
+}
 func (*fake) Folders(context.Context, config.Provider) ([]string, error) { return nil, nil }
 func (f *fake) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
 	return f.messages, nil
@@ -43,18 +44,17 @@ func (f *fake) Send(_ context.Context, _ config.Provider, _ string, _ []string, 
 	return nil
 }
 
-func (f *fake) StoreFlags(_ context.Context, _ config.Provider, folder string, uid imap.UID, uidValidity uint32, flags []imap.Flag, op imap.StoreFlagsOp) error {
+func (f *fake) StoreFlags(_ context.Context, _ config.Provider, folder string, target provider.Message, flags []provider.Flag, action provider.FlagAction) error {
 	f.stored.folder = folder
-	f.stored.uid = uid
-	f.stored.uidValidity = uidValidity
-	f.stored.flags = append([]imap.Flag(nil), flags...)
-	f.stored.op = op
+	f.stored.target = target
+	f.stored.flags = append([]provider.Flag(nil), flags...)
+	f.stored.action = action
 	return nil
 }
 
 func TestSendNoPartialDelivery(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
-	content := `providers:
+	content := fmt.Sprintf(`providers:
   home:
     address: me@example.org
     imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
@@ -64,8 +64,8 @@ profiles:
     folders: {allow: ["ro:INBOX"]}
     addresses: {allow: ["wo:friend@example.org"]}
 users:
-  bot: {provider: home, profile: bot, password: [printf, secret]}
-`
+  bot: {provider: home, profile: bot, token_hash: %s}
+`, tokenHash("agent-token"))
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ users:
 	}
 	f := &fake{}
 	r := &Relay{ConfigPath: path, Provider: f, Store: store}
-	id, err := r.Authenticate(context.Background(), "bot", "secret")
+	id, err := r.AuthenticateToken("agent-token")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ users:
 		t.Fatal(err)
 	}
 	f := &fake{messages: []provider.Message{{
-		UID: 42, UIDValidity: 101, Raw: []byte("From: sender@example.org\r\nSubject: Hi\r\n\r\nBody"),
+		ID: "42", Generation: "101", Raw: []byte("From: sender@example.org\r\nSubject: Hi\r\n\r\nBody"),
 	}}}
 	r := &Relay{ConfigPath: path, Provider: f, Store: mustStore(t)}
 	identity, err := r.AuthenticateToken("agent-token")
@@ -149,10 +149,10 @@ users:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.UpdateFlags(context.Background(), identity, "INBOX", snapshot.Messages[0].UID, []imap.Flag{imap.FlagSeen}, imap.StoreFlagsAdd); err != nil {
+	if err := r.UpdateFlags(context.Background(), identity, "INBOX", snapshot.Messages[0].UID, []provider.Flag{provider.FlagSeen}, provider.FlagAdd); err != nil {
 		t.Fatal(err)
 	}
-	if f.stored.folder != "INBOX" || f.stored.uid != 42 || f.stored.uidValidity != 101 || f.stored.op != imap.StoreFlagsAdd || len(f.stored.flags) != 1 || f.stored.flags[0] != imap.FlagSeen {
+	if f.stored.folder != "INBOX" || f.stored.target.ID != "42" || f.stored.target.Generation != "101" || f.stored.action != provider.FlagAdd || len(f.stored.flags) != 1 || f.stored.flags[0] != provider.FlagSeen {
 		t.Fatalf("unexpected store call: %+v", f.stored)
 	}
 }
@@ -187,6 +187,37 @@ users:
 	}
 	if !current.Policy.ReadFolder("Private") || current.Policy.ReadFolder("INBOX") {
 		t.Fatal("current operation did not use updated policy")
+	}
+}
+
+func TestTokenRotationRevokesAuthenticatedIdentity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	content := fmt.Sprintf(`providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot: {folders: {allow: ["ro:INBOX"]}, addresses: {allow: ["wo:friend@example.org"]}}
+users:
+  bot: {provider: home, profile: bot, token_hash: %s}
+`, tokenHash("old-token"))
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f := &fake{}
+	r := &Relay{ConfigPath: path, Provider: f, Store: mustStore(t)}
+	identity, err := r.AuthenticateToken("old-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotated := strings.Replace(content, tokenHash("old-token"), tokenHash("new-token"), 1)
+	if err := os.WriteFile(path, []byte(rotated), 0600); err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte("From: me@example.org\r\nTo: friend@example.org\r\nSubject: Hello\r\n\r\nHi")
+	if err := r.Send(context.Background(), identity, "me@example.org", []string{"friend@example.org"}, raw); err == nil || f.sent != 0 {
+		t.Fatal("rotated token retained send access")
 	}
 }
 

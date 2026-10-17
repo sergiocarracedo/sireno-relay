@@ -101,17 +101,14 @@ type AttachmentRules struct {
 }
 
 type User struct {
-	Provider  string   `yaml:"provider"`
-	Profile   string   `yaml:"profile"`
-	Password  Password `yaml:"password"`
-	TokenHash string   `yaml:"token_hash"`
-	TagSent   *bool    `yaml:"tag_sent"`
+	Provider  string `yaml:"provider"`
+	Profile   string `yaml:"profile"`
+	TokenHash string `yaml:"token_hash"`
+	TagSent   *bool  `yaml:"tag_sent"`
 }
 
 type Listen struct {
-	IMAP string `yaml:"imap"`
-	SMTP string `yaml:"smtp"`
-	MCP  string `yaml:"mcp"`
+	MCP string `yaml:"mcp"`
 }
 
 type Logging struct {
@@ -256,6 +253,7 @@ func (c *Config) Validate() ([]string, error) {
 			}
 		}
 	}
+	tokenOwners := make(map[string]string)
 	for name, u := range c.Users {
 		if strings.ContainsAny(name, "\r\n:") || name == "" {
 			return nil, fmt.Errorf("invalid user name %q", name)
@@ -266,11 +264,17 @@ func (c *Config) Validate() ([]string, error) {
 		if _, ok := c.Profiles[u.Profile]; !ok {
 			return nil, fmt.Errorf("user %q references unknown profile", name)
 		}
-		if u.Password.Value == "" && len(u.Password.Command) == 0 && u.TokenHash == "" {
-			return nil, fmt.Errorf("user %q needs a password or token_hash", name)
+		if u.TokenHash == "" {
+			return nil, fmt.Errorf("user %q needs a token_hash", name)
 		}
 		if u.TokenHash != "" && !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(u.TokenHash) {
 			return nil, fmt.Errorf("user %q has an invalid token_hash", name)
+		}
+		if u.TokenHash != "" {
+			if owner, exists := tokenOwners[u.TokenHash]; exists {
+				return nil, fmt.Errorf("users %q and %q have the same token_hash", owner, name)
+			}
+			tokenOwners[u.TokenHash] = name
 		}
 	}
 	for name, profile := range c.Profiles {
@@ -331,21 +335,13 @@ func (c *Config) Validate() ([]string, error) {
 			}
 		}
 	}
-	for _, addr := range []string{c.Listen.IMAP, c.Listen.SMTP} {
-		if addr == "" {
-			continue
-		}
-		host, _, err := net.SplitHostPort(addr)
+	if c.Listen.MCP != "" {
+		host, _, err := net.SplitHostPort(c.Listen.MCP)
 		if err != nil {
-			return nil, fmt.Errorf("invalid listener %q: %w", addr, err)
+			return nil, fmt.Errorf("invalid MCP listener %q: %w", c.Listen.MCP, err)
 		}
 		if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-			return nil, fmt.Errorf("listener %q must bind loopback", addr)
-		}
-	}
-	if c.Listen.MCP != "" {
-		if _, _, err := net.SplitHostPort(c.Listen.MCP); err != nil {
-			return nil, fmt.Errorf("invalid MCP listener %q: %w", c.Listen.MCP, err)
+			return nil, fmt.Errorf("MCP listener %q must bind loopback", c.Listen.MCP)
 		}
 	}
 	if c.Logging.Level != "" && c.Logging.Level != "error" && c.Logging.Level != "warn" && c.Logging.Level != "info" && c.Logging.Level != "debug" {

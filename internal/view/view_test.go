@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/emersion/go-imap/v2"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/policy"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
@@ -13,6 +12,9 @@ import (
 
 type fakeProvider struct{ messages []provider.Message }
 
+func (*fakeProvider) Capabilities(context.Context, config.Provider) (provider.Capabilities, error) {
+	return provider.Capabilities{provider.CapacityFolders: true, provider.CapacityList: true, provider.CapacityRead: true, provider.CapacitySend: true}, nil
+}
 func (f *fakeProvider) Folders(context.Context, config.Provider) ([]string, error) {
 	return []string{"INBOX/A", "INBOX/Private"}, nil
 }
@@ -36,8 +38,8 @@ func TestVirtualIdentityAndHiddenMail(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := &fakeProvider{messages: []provider.Message{
-		{UID: imap.UID(100), UIDValidity: 101, Raw: []byte("From: a@example.org\r\nSubject: Invoice\r\n\r\nhello")},
-		{UID: imap.UID(101), UIDValidity: 101, Raw: []byte("From: a@example.org\r\nSubject: Password recovery\r\n\r\nsecret")},
+		{ID: "100", Generation: "101", Raw: []byte("From: a@example.org\r\nSubject: Invoice\r\n\r\nhello")},
+		{ID: "101", Generation: "101", Raw: []byte("From: a@example.org\r\nSubject: Password recovery\r\n\r\nsecret")},
 	}}
 	svc := Service{Provider: f, Store: store}
 	folders, err := svc.Folders(ctx, config.Provider{}, p)
@@ -56,7 +58,7 @@ func TestVirtualIdentityAndHiddenMail(t *testing.T) {
 	if len(first.Messages) != 1 || first.Messages[0].UID != 1 || first.UIDNext != 2 {
 		t.Fatalf("unexpected snapshot %+v", first)
 	}
-	f.messages = append(f.messages, provider.Message{UID: 102, UIDValidity: 101, Raw: []byte("Subject: Password recovery\r\n\r\nsecret2")})
+	f.messages = append(f.messages, provider.Message{ID: "102", Generation: "101", Raw: []byte("Subject: Password recovery\r\n\r\nsecret2")})
 	second := read()
 	if second.UIDNext != first.UIDNext || len(second.Messages) != 1 {
 		t.Fatal("hidden mail changed virtual counts or IDs")
@@ -87,7 +89,7 @@ func TestVirtualIdentityResetsWhenUpstreamUIDValidityChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := &fakeProvider{messages: []provider.Message{{
-		UID: 42, UIDValidity: 100, Raw: []byte("From: a@example.org\r\nSubject: Invoice\r\n\r\nfirst"),
+		ID: "42", Generation: "100", Raw: []byte("From: a@example.org\r\nSubject: Invoice\r\n\r\nfirst"),
 	}}}
 	svc := Service{Provider: f, Store: store}
 	first, err := svc.Snapshot(ctx, "bot", "home", "INBOX", config.Provider{}, profile, p)
@@ -95,7 +97,7 @@ func TestVirtualIdentityResetsWhenUpstreamUIDValidityChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.messages = []provider.Message{{
-		UID: 42, UIDValidity: 101, Raw: []byte("From: a@example.org\r\nSubject: Replacement\r\n\r\nsecond"),
+		ID: "42", Generation: "101", Raw: []byte("From: a@example.org\r\nSubject: Replacement\r\n\r\nsecond"),
 	}}
 	second, err := svc.Snapshot(ctx, "bot", "home", "INBOX", config.Provider{}, profile, p)
 	if err != nil {

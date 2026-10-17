@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,10 +14,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/emersion/go-imap/v2"
-	"github.com/emersion/go-imap/v2/imapclient"
-	"github.com/emersion/go-sasl"
-	wiresmtp "github.com/emersion/go-smtp"
 	"github.com/pterm/pterm"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
@@ -83,7 +78,7 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 		}
 		return nil
 	}
-	root.AddCommand(newVersionCmd(), newCompletionCmd(root), newConfigCheckCmd(newViper()), newPolicyCheckCmd(newViper()), newServeCmd(newViper()), newMailCmd(newViper()))
+	root.AddCommand(newVersionCmd(), newCompletionCmd(root), newConfigCheckCmd(newViper()), newPolicyCheckCmd(newViper()), newServeCmd(newViper()))
 	return root
 }
 
@@ -246,200 +241,9 @@ func openRelay(path string) (*relay.Relay, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &relay.Relay{ConfigPath: path, Provider: provider.Remote{}, Store: store}, nil
+	return &relay.Relay{ConfigPath: path, Provider: provider.Himalaya{}, Store: store}, nil
 }
 
 func info(out io.Writer, values ...any)    { pterm.Info.WithWriter(out).Println(values...) }
 func success(out io.Writer, values ...any) { pterm.Success.WithWriter(out).Println(values...) }
 func warning(out io.Writer, values ...any) { pterm.Warning.WithWriter(out).Println(values...) }
-
-func newMailCmd(v *viper.Viper) *cobra.Command {
-	mail := &cobra.Command{Use: "mail", Short: "Access the relay as an agent"}
-	agentFlags(v, mail)
-	mail.AddCommand(newMailFoldersCmd(v), newMailListCmd(v), newMailSearchCmd(v), newMailReadCmd(v), newMailSendCmd(v))
-	return mail
-}
-
-func agentFlags(v *viper.Viper, cmd *cobra.Command) {
-	bindString(v, cmd.PersistentFlags(), "user", "", "agent login")
-	bindString(v, cmd.PersistentFlags(), "imap", "127.0.0.1:1143", "relay IMAP address")
-	bindString(v, cmd.PersistentFlags(), "smtp", "127.0.0.1:1025", "relay SMTP address")
-	bindString(v, cmd.PersistentFlags(), "folder", "INBOX", "mailbox")
-}
-
-func agentPassword() (string, error) {
-	if password := os.Getenv("SIRENO_AGENT_PASSWORD"); password != "" {
-		return password, nil
-	}
-	return "", errors.New("SIRENO_AGENT_PASSWORD is required")
-}
-func agentUser(v *viper.Viper) (string, error) {
-	if user := v.GetString("user"); user != "" {
-		return user, nil
-	}
-	return "", usageError{errors.New("--user is required")}
-}
-
-func imapClient(v *viper.Viper) (*imapclient.Client, error) {
-	user, err := agentUser(v)
-	if err != nil {
-		return nil, err
-	}
-	password, err := agentPassword()
-	if err != nil {
-		return nil, err
-	}
-	client, err := imapclient.DialInsecure(v.GetString("imap"), nil)
-	if err != nil {
-		return nil, err
-	}
-	if err := client.Login(user, password).Wait(); err != nil {
-		client.Close()
-		return nil, err
-	}
-	return client, nil
-}
-
-func newMailFoldersCmd(v *viper.Viper) *cobra.Command {
-	cmd := &cobra.Command{Use: "folders", Short: "List visible folders", Args: usageArgs(cobra.NoArgs)}
-	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		client, err := imapClient(v)
-		if err != nil {
-			return err
-		}
-		defer client.Close()
-		boxes, err := client.List("", "*", nil).Collect()
-		if err != nil {
-			return err
-		}
-		for _, box := range boxes {
-			fmt.Fprintln(cmd.OutOrStdout(), box.Mailbox)
-		}
-		return nil
-	}
-	return cmd
-}
-
-func newMailListCmd(v *viper.Viper) *cobra.Command   { return newMailSearchLikeCmd(v, "list", false) }
-func newMailSearchCmd(v *viper.Viper) *cobra.Command { return newMailSearchLikeCmd(v, "search", true) }
-func newMailSearchLikeCmd(v *viper.Viper, name string, needsQuery bool) *cobra.Command {
-	cmd := &cobra.Command{Use: name, Short: "List visible messages", Args: usageArgs(cobra.NoArgs)}
-	if needsQuery {
-		bindString(v, cmd.Flags(), "query", "", "search visible message text")
-	}
-	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		if needsQuery && v.GetString("query") == "" {
-			return usageError{errors.New("search requires --query")}
-		}
-		client, err := imapClient(v)
-		if err != nil {
-			return err
-		}
-		defer client.Close()
-		if _, err := client.Select(v.GetString("folder"), nil).Wait(); err != nil {
-			return err
-		}
-		criteria := &imap.SearchCriteria{}
-		if needsQuery {
-			criteria.Text = []string{v.GetString("query")}
-		}
-		found, err := client.UIDSearch(criteria, nil).Wait()
-		if err != nil {
-			return err
-		}
-		return printEnvelopes(cmd.OutOrStdout(), client, found.AllUIDs())
-	}
-	return cmd
-}
-
-func printEnvelopes(out io.Writer, client *imapclient.Client, ids []imap.UID) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	var matches imap.UIDSet
-	for _, uid := range ids {
-		matches.AddNum(uid)
-	}
-	items, err := client.Fetch(matches, &imap.FetchOptions{UID: true, Envelope: true}).Collect()
-	if err != nil {
-		return err
-	}
-	if len(items) != len(ids) {
-		return errors.New("mailbox view changed; retry")
-	}
-	for _, item := range items {
-		if item.Envelope == nil {
-			return errors.New("mailbox view changed; retry")
-		}
-		fmt.Fprintf(out, "%d\t%s\n", item.UID, item.Envelope.Subject)
-	}
-	return nil
-}
-
-func newMailReadCmd(v *viper.Viper) *cobra.Command {
-	cmd := &cobra.Command{Use: "read", Short: "Read a visible message", Args: usageArgs(cobra.NoArgs)}
-	cmd.Flags().Uint("uid", 0, "virtual message UID")
-	_ = v.BindPFlag("uid", cmd.Flags().Lookup("uid"))
-	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		if v.GetUint("uid") == 0 {
-			return usageError{errors.New("read requires --uid")}
-		}
-		client, err := imapClient(v)
-		if err != nil {
-			return err
-		}
-		defer client.Close()
-		if _, err := client.Select(v.GetString("folder"), nil).Wait(); err != nil {
-			return err
-		}
-		var ids imap.UIDSet
-		ids.AddNum(imap.UID(v.GetUint("uid")))
-		message, err := client.Fetch(ids, &imap.FetchOptions{UID: true, BodySection: []*imap.FetchItemBodySection{{Peek: true}}}).Collect()
-		if err != nil {
-			return err
-		}
-		if len(message) != 1 || len(message[0].BodySection) != 1 {
-			return errors.New("message unavailable")
-		}
-		_, err = cmd.OutOrStdout().Write(message[0].BodySection[0].Bytes)
-		return err
-	}
-	return cmd
-}
-
-func newMailSendCmd(v *viper.Viper) *cobra.Command {
-	cmd := &cobra.Command{Use: "send", Short: "Send a policy-checked message", Args: usageArgs(cobra.NoArgs)}
-	bindString(v, cmd.Flags(), "from", "", "sender address")
-	bindString(v, cmd.Flags(), "to", "", "comma-separated recipients")
-	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		user, err := agentUser(v)
-		if err != nil {
-			return err
-		}
-		password, err := agentPassword()
-		if err != nil {
-			return err
-		}
-		if v.GetString("from") == "" || v.GetString("to") == "" {
-			return usageError{errors.New("send requires --from and --to")}
-		}
-		message, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 4*1024*1024+1))
-		if err != nil {
-			return err
-		}
-		client, err := wiresmtp.Dial(v.GetString("smtp"))
-		if err != nil {
-			return err
-		}
-		defer client.Close()
-		if err := client.Auth(sasl.NewPlainClient("", user, password)); err != nil {
-			return err
-		}
-		recipients := strings.Split(v.GetString("to"), ",")
-		for i := range recipients {
-			recipients[i] = strings.TrimSpace(recipients[i])
-		}
-		return client.SendMail(v.GetString("from"), recipients, bytes.NewReader(message))
-	}
-	return cmd
-}

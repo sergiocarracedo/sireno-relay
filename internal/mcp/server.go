@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -9,11 +11,12 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/emersion/go-imap/v2"
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/view"
 )
@@ -28,10 +31,13 @@ func Handler(r *relay.Relay) http.Handler {
 
 func HandlerWithAudit(r *relay.Relay, logger *slog.Logger, captureContent bool) http.Handler {
 	server := gomcp.NewServer(&gomcp.Implementation{Name: "sireno-relay", Version: "dev"}, nil)
+	cursors := newCursorStore()
 	gomcp.AddTool(server, &gomcp.Tool{Name: "list_folders", Description: "List folders visible to the authenticated user"}, folders(r))
-	gomcp.AddTool(server, &gomcp.Tool{Name: "list_messages", Description: "List sanitized messages visible in one folder"}, messages(r))
+	gomcp.AddTool(server, &gomcp.Tool{Name: "list_messages", Description: "List a 20-message sanitized page visible in one folder"}, messagesWithCursors(r, cursors))
+	gomcp.AddTool(server, &gomcp.Tool{Name: "search_messages", Description: "Search sanitized messages with Himalaya's supported query language"}, searchMessages(r, cursors))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "read_message", Description: "Read one sanitized visible message by virtual UID"}, readMessage(r))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "read_messages", Description: "Read up to 20 sanitized visible messages by virtual UID"}, readMessages(r))
+	gomcp.AddTool(server, &gomcp.Tool{Name: "send_message", Description: "Send a policy-checked plain-text message without attachments"}, sendMessage(r))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "update_message_flags", Description: "Add or remove safe flags on one visible writable message"}, updateMessageFlags(r))
 	inner := gomcp.NewStreamableHTTPHandler(func(*http.Request) *gomcp.Server { return server }, &gomcp.StreamableHTTPOptions{JSONResponse: true})
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -103,6 +109,47 @@ func serveAttachment(r *relay.Relay, identity *relay.Identity, w http.ResponseWr
 
 type listMessagesArgs struct {
 	Folder string `json:"folder" jsonschema:"folder to list"`
+	Query  string `json:"query,omitempty" jsonschema:"optional Himalaya envelope query"`
+	Cursor string `json:"cursor,omitempty" jsonschema:"opaque cursor returned by a previous page"`
+}
+
+type cursorStore struct {
+	mu      sync.Mutex
+	cursors map[string]cursor
+}
+
+type cursor struct {
+	user, provider, folder, query string
+	page                          uint32
+	expires                       time.Time
+}
+
+func newCursorStore() *cursorStore { return &cursorStore{cursors: make(map[string]cursor)} }
+
+func (s *cursorStore) page(identity *relay.Identity, folder, query, token string) (uint32, error) {
+	if token == "" {
+		return 1, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	value, ok := s.cursors[token]
+	delete(s.cursors, token)
+	if !ok || time.Now().After(value.expires) || value.user != identity.Name || value.provider != identity.AccountName || value.folder != folder || value.query != query || value.page == 0 {
+		return 0, errors.New("mailbox unavailable")
+	}
+	return value.page, nil
+}
+
+func (s *cursorStore) next(identity *relay.Identity, folder, query string, page uint32) (string, error) {
+	var bytes [24]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(bytes[:])
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cursors[token] = cursor{user: identity.Name, provider: identity.AccountName, folder: folder, query: query, page: page, expires: time.Now().Add(5 * time.Minute)}
+	return token, nil
 }
 
 type envelope struct {
@@ -149,6 +196,13 @@ type messageContent struct {
 	Attachments []attachmentDescriptor `json:"attachments,omitempty"`
 }
 
+type sendMessageArgs struct {
+	From    string   `json:"from" jsonschema:"sender address; must be the provider account address"`
+	To      []string `json:"to" jsonschema:"one or more recipient addresses"`
+	Subject string   `json:"subject" jsonschema:"plain-text subject"`
+	Body    string   `json:"body" jsonschema:"plain-text body; attachments are not supported"`
+}
+
 type updateMessageFlagsArgs struct {
 	Folder string   `json:"folder" jsonschema:"folder containing the message"`
 	UID    uint32   `json:"uid" jsonschema:"virtual UID returned by list_messages"`
@@ -157,17 +211,31 @@ type updateMessageFlagsArgs struct {
 }
 
 func messages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, listMessagesArgs) (*gomcp.CallToolResult, any, error) {
+	return messagesWithCursors(r, newCursorStore())
+}
+
+func messagesWithCursors(r *relay.Relay, cursors *cursorStore) func(context.Context, *gomcp.CallToolRequest, listMessagesArgs) (*gomcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *gomcp.CallToolRequest, args listMessagesArgs) (*gomcp.CallToolResult, any, error) {
 		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
-		if identity == nil || args.Folder == "" {
+		if identity == nil || args.Folder == "" || len(args.Query) > 512 || strings.ContainsAny(args.Query, "\r\n\x00") {
 			return nil, nil, errors.New("mailbox unavailable")
 		}
-		snapshot, err := r.Snapshot(ctx, identity, args.Folder)
+		page, err := cursors.page(identity, args.Folder, args.Query, args.Cursor)
 		if err != nil {
 			return nil, nil, errors.New("mailbox unavailable")
 		}
-		items := make([]envelope, 0, len(snapshot.Messages))
+		snapshot, hasMore, err := r.Page(ctx, identity, args.Folder, page, args.Query)
+		if err != nil {
+			if errors.Is(err, provider.ErrCapacityUnavailable) {
+				return nil, nil, provider.ErrCapacityUnavailable
+			}
+			return nil, nil, errors.New("mailbox unavailable")
+		}
+		items := make([]envelope, 0, min(len(snapshot.Messages), 20))
 		for _, message := range snapshot.Messages {
+			if len(items) == 20 {
+				break
+			}
 			item := envelope{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc}
 			if message.Mail.Date != nil {
 				item.Date = message.Mail.Date.Format(time.RFC3339)
@@ -179,7 +247,24 @@ func messages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, list
 		}
 		data, _ := json.Marshal(items)
 		result := map[string]any{"messages": items}
+		if hasMore {
+			next, err := cursors.next(identity, args.Folder, args.Query, page+1)
+			if err != nil {
+				return nil, nil, errors.New("mailbox unavailable")
+			}
+			result["next_cursor"] = next
+		}
 		return &gomcp.CallToolResult{Content: []gomcp.Content{&gomcp.TextContent{Text: string(data)}}, StructuredContent: result}, result, nil
+	}
+}
+
+func searchMessages(r *relay.Relay, cursors *cursorStore) func(context.Context, *gomcp.CallToolRequest, listMessagesArgs) (*gomcp.CallToolResult, any, error) {
+	list := messagesWithCursors(r, cursors)
+	return func(ctx context.Context, request *gomcp.CallToolRequest, args listMessagesArgs) (*gomcp.CallToolResult, any, error) {
+		if strings.TrimSpace(args.Query) == "" {
+			return nil, nil, errors.New("mailbox unavailable")
+		}
+		return list(ctx, request, args)
 	}
 }
 
@@ -191,6 +276,9 @@ func readMessage(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, r
 		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
 		message, err := r.Message(ctx, identity, args.Folder, args.UID)
 		if err != nil {
+			if errors.Is(err, provider.ErrCapacityUnavailable) {
+				return nil, nil, provider.ErrCapacityUnavailable
+			}
 			return nil, nil, errors.New("message unavailable")
 		}
 		result := map[string]any{"message": messageResult(args.Folder, *message)}
@@ -213,6 +301,9 @@ func readMessages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, 
 		}
 		messages, err := r.Messages(ctx, identity, args.Folder, args.UIDs)
 		if err != nil {
+			if errors.Is(err, provider.ErrCapacityUnavailable) {
+				return nil, nil, provider.ErrCapacityUnavailable
+			}
 			return nil, nil, errors.New("message unavailable")
 		}
 		items := make([]messageContent, 0, len(messages))
@@ -221,6 +312,32 @@ func readMessages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, 
 		}
 		return structuredResult(map[string]any{"messages": items})
 	}
+}
+
+func sendMessage(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, sendMessageArgs) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *gomcp.CallToolRequest, args sendMessageArgs) (*gomcp.CallToolResult, any, error) {
+		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
+		if identity == nil || !safeHeader(args.From) || !safeHeader(args.Subject) || len(args.To) == 0 || len(args.To) > 100 || len(args.Body) > 1<<20 {
+			return nil, nil, errors.New("message unavailable")
+		}
+		for _, recipient := range args.To {
+			if !safeHeader(recipient) {
+				return nil, nil, errors.New("message unavailable")
+			}
+		}
+		raw := []byte("From: " + args.From + "\r\nTo: " + strings.Join(args.To, ", ") + "\r\nSubject: " + args.Subject + "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + args.Body)
+		if err := r.Send(ctx, identity, args.From, args.To, raw); err != nil {
+			if errors.Is(err, provider.ErrCapacityUnavailable) {
+				return nil, nil, provider.ErrCapacityUnavailable
+			}
+			return nil, nil, errors.New("message unavailable")
+		}
+		return structuredResult(map[string]any{"sent": true})
+	}
+}
+
+func safeHeader(value string) bool {
+	return value != "" && len(value) <= 998 && !strings.ContainsAny(value, "\r\n\x00")
 }
 
 func updateMessageFlags(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, updateMessageFlagsArgs) (*gomcp.CallToolResult, any, error) {
@@ -238,29 +355,32 @@ func updateMessageFlags(r *relay.Relay) func(context.Context, *gomcp.CallToolReq
 		}
 		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
 		if err := r.UpdateFlags(ctx, identity, args.Folder, args.UID, flags, op); err != nil {
+			if errors.Is(err, provider.ErrCapacityUnavailable) {
+				return nil, nil, provider.ErrCapacityUnavailable
+			}
 			return nil, nil, errors.New("message update unavailable")
 		}
 		return structuredResult(map[string]any{"updated": true})
 	}
 }
 
-func flagOperation(action string) (imap.StoreFlagsOp, bool) {
+func flagOperation(action string) (provider.FlagAction, bool) {
 	switch action {
 	case "add":
-		return imap.StoreFlagsAdd, true
+		return provider.FlagAdd, true
 	case "remove":
-		return imap.StoreFlagsDel, true
+		return provider.FlagRemove, true
 	default:
-		return 0, false
+		return "", false
 	}
 }
 
-func messageFlags(names []string) ([]imap.Flag, bool) {
+func messageFlags(names []string) ([]provider.Flag, bool) {
 	if len(names) == 0 || len(names) > 3 {
 		return nil, false
 	}
-	known := map[string]imap.Flag{"seen": imap.FlagSeen, "flagged": imap.FlagFlagged, "answered": imap.FlagAnswered}
-	flags := make([]imap.Flag, 0, len(names))
+	known := map[string]provider.Flag{"seen": provider.FlagSeen, "flagged": provider.FlagFlagged, "answered": provider.FlagAnswered}
+	flags := make([]provider.Flag, 0, len(names))
 	seen := make(map[string]bool, len(names))
 	for _, name := range names {
 		flag, ok := known[name]
@@ -298,6 +418,9 @@ func folders(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, struc
 		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
 		items, err := r.Folders(ctx, identity)
 		if err != nil {
+			if errors.Is(err, provider.ErrCapacityUnavailable) {
+				return nil, nil, provider.ErrCapacityUnavailable
+			}
 			return nil, nil, err
 		}
 		data, _ := json.Marshal(items)
