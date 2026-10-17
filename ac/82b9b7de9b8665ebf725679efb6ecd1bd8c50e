@@ -1,0 +1,16 @@
+docs/plans/2026-10-17-002-feat-release-completion-and-website-plan.md
+  h_f90ee31b03fc41 1-106
+internal/mcp/server.go
+  h_f90ee31b03fc41 6,10,21,125-127,132,134,140-141,143,146,154,158-167,236,240-248,250-262,264-265,267-270,274-275,281,286-296
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ac82b9b7de9b8665ebf725679efb6ecd1bd8c50e",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
