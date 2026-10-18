@@ -1,0 +1,18 @@
+.github/workflows/ci.yml
+  h_f90ee31b03fc41 20
+.gitignore
+  h_f90ee31b03fc41 7-11
+Makefile
+  h_f90ee31b03fc41 9,12,15,18,28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "46654be00de4429ac4aee90840c3ffd09147e3f3",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
