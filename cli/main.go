@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/pterm/pterm"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
@@ -130,8 +132,13 @@ func newPolicyCheckCmd(v *viper.Viper) *cobra.Command {
 func newServeCmd(v *viper.Viper) *cobra.Command {
 	cmd := &cobra.Command{Use: "serve", Short: "Serve the token-authenticated MCP relay", Args: usageArgs(cobra.NoArgs)}
 	configFlag(v, cmd)
+	cmd.Flags().Bool("debug", false, "write sanitized MCP requests and responses to stdout")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		return serve(cmd.Context(), cmd.OutOrStdout(), v.GetString("config"))
+		debug, err := cmd.Flags().GetBool("debug")
+		if err != nil {
+			return err
+		}
+		return serve(cmd.Context(), cmd.OutOrStdout(), v.GetString("config"), debug)
 	}
 	return cmd
 }
@@ -200,7 +207,7 @@ func policyCheck(ctx context.Context, out io.Writer, path, user, folder string) 
 	return nil
 }
 
-func serve(ctx context.Context, out io.Writer, path string) error {
+func serve(ctx context.Context, out io.Writer, path string, debug bool) error {
 	cfg, _, err := loadConfig(path, out)
 	if err != nil {
 		return err
@@ -212,7 +219,13 @@ func serve(ctx context.Context, out io.Writer, path string) error {
 	if cfg.Listen.MCP == "" {
 		cfg.Listen.MCP = "127.0.0.1:8080"
 	}
-	logger, closeLogger, err := audit.Open(cfg.Logging)
+	logging := cfg.Logging
+	if debug {
+		logging.Level = "debug"
+		logging.Target = "stdout"
+		logging.MCP.CaptureContent = true
+	}
+	logger, closeLogger, err := audit.Open(logging)
 	if err != nil {
 		return err
 	}
@@ -221,9 +234,10 @@ func serve(ctx context.Context, out io.Writer, path string) error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: proxymcp.HandlerWithAudit(r, logger, cfg.Logging.MCP.CaptureContent)}
+	server := &http.Server{Handler: proxymcp.HandlerWithAudit(r, logger, logging.MCP.CaptureContent)}
 	failures := make(chan error, 1)
 	go func() { failures <- server.Serve(listener) }()
+	go watchConfigChanges(ctx, path, out)
 	success(out, fmt.Sprintf("MCP relay listening on %s", cfg.Listen.MCP))
 	select {
 	case <-ctx.Done():
@@ -234,6 +248,42 @@ func serve(ctx context.Context, out io.Writer, path string) error {
 		}
 		return err
 	}
+}
+
+// watchConfigChanges reports owner edits. Relay operations independently reload
+// this file, so a successful notice means subsequent requests use the change.
+func watchConfigChanges(ctx context.Context, path string, out io.Writer) {
+	current, err := configHash(path)
+	if err != nil {
+		return
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			next, err := configHash(path)
+			if err != nil || next == current {
+				continue
+			}
+			current = next
+			if _, _, err := loadConfig(path, io.Discard); err != nil {
+				warning(out, fmt.Sprintf("configuration changed but is invalid: %v", err))
+				continue
+			}
+			info(out, fmt.Sprintf("configuration changed and reloaded: %s", filepath.Base(path)))
+		}
+	}
+}
+
+func configHash(path string) ([sha256.Size]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return [sha256.Size]byte{}, err
+	}
+	return sha256.Sum256(data), nil
 }
 
 func openRelay(path string) (*relay.Relay, error) {

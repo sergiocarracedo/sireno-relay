@@ -77,3 +77,15 @@ func TestCommandTooling(t *testing.T) {
 		t.Fatalf("error = %T, want usageError", err)
 	}
 }
+
+func TestServeAcceptsDebugFlag(t *testing.T) {
+	cmd := newRootCmd(io.Discard, io.Discard)
+	serve, _, err := cmd.Find([]string{"serve"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	flag := serve.Flags().Lookup("debug")
+	if flag == nil || flag.DefValue != "false" {
+		t.Fatalf("debug flag=%#v", flag)
+	}
+}

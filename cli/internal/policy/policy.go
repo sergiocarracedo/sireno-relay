@@ -126,13 +126,18 @@ func (p *Policy) ReadMessage(folder string, addresses []string) bool {
 		return true
 	}
 	for _, address := range addresses {
+		allowed := false
 		for _, r := range p.addresses.allow {
 			if (r.mode == "ro" || r.mode == "rw") && r.match(address) {
-				return true
+				allowed = true
+				break
 			}
 		}
+		if !allowed {
+			return false
+		}
 	}
-	return false
+	return len(addresses) > 0
 }
 
 func canonicalFolder(value string) string {

@@ -9,7 +9,7 @@ import (
 func TestReadAndSend(t *testing.T) {
 	p, err := Compile(config.Profile{
 		Folders:   config.Rules{Allow: []string{"rw:INBOX/*"}, Deny: []string{"rw:INBOX/Private"}},
-		Addresses: config.Rules{Allow: []string{"ro:alice@example.org", "wo:trusted@example.org"}, Deny: []string{"ro:blocked@example.org", "wo:bad@example.org"}},
+		Addresses: config.Rules{Allow: []string{"ro:alice@example.org", "ro:bob@example.org", "wo:trusted@example.org"}, Deny: []string{"ro:blocked@example.org", "wo:bad@example.org"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -20,8 +20,10 @@ func TestReadAndSend(t *testing.T) {
 		want      bool
 	}{
 		{"INBOX/Invoices", []string{"alice@example.org"}, true},
+		{"INBOX/Invoices", []string{"alice@example.org", "bob@example.org"}, true},
 		{"INBOX/Private", []string{"alice@example.org"}, false},
 		{"INBOX/Invoices", []string{"other@example.org"}, false},
+		{"INBOX/Invoices", []string{"alice@example.org", "other@example.org"}, false},
 		{"INBOX/Invoices", []string{"alice@example.org", "blocked@example.org"}, false},
 	} {
 		if got := p.ReadMessage(tc.folder, tc.addresses); got != tc.want {

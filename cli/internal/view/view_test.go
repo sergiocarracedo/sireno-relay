@@ -119,3 +119,25 @@ func TestVirtualIdentityResetsWhenUpstreamUIDValidityChanges(t *testing.T) {
 		t.Fatalf("unexpected reset snapshot: %+v", second)
 	}
 }
+
+func TestPermittedRecipientDoesNotAuthorizeUnpermittedSender(t *testing.T) {
+	profile := config.Profile{
+		Folders:   config.Rules{Allow: []string{"ro:INBOX"}},
+		Addresses: config.Rules{Allow: []string{"ro:bot@example.org"}},
+	}
+	p, err := policy.Compile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := Service{Provider: &fakeProvider{messages: []provider.Message{{
+		ID: "1", Generation: "g", Raw: []byte("From: unapproved@example.org\r\nTo: bot@example.org\r\nSubject: Do not expose\r\n\r\nBody"),
+	}}}, Store: store}
+	snapshot, err := service.Snapshot(context.Background(), "bot", "home", "INBOX", config.Provider{}, profile, p)
+	if err != nil || len(snapshot.Messages) != 0 {
+		t.Fatalf("snapshot=%#v err=%v", snapshot, err)
+	}
+}
