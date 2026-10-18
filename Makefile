@@ -6,7 +6,8 @@ PREFIX ?= $(HOME)/.local
 .PHONY: build fmt-check test vet check hooks install
 
 build:
-	cd cli && go build -ldflags '$(LDFLAGS)' -o bin/$(BIN) .
+	mkdir -p bin
+	cd cli && go build -ldflags '$(LDFLAGS)' -o ../bin/$(BIN) .
 
 fmt-check:
 	@test -z "$$(gofmt -l $$(find cli -name '*.go' -type f -not -path './vendor/*'))" || (echo "Run gofmt on the files above."; exit 1)
@@ -25,4 +26,4 @@ hooks:
 install:
 	$(MAKE) build
 	install -d "$(DESTDIR)$(PREFIX)/bin"
-	install -m 0755 cli/bin/$(BIN) "$(DESTDIR)$(PREFIX)/bin/$(BIN)"
+	install -m 0755 bin/$(BIN) "$(DESTDIR)$(PREFIX)/bin/$(BIN)"
