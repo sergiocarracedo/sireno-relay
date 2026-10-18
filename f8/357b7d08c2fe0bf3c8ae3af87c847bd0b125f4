@@ -1,0 +1,20 @@
+website/astro.config.mjs
+  h_f90ee31b03fc41 1-6
+website/package-lock.json
+  h_f90ee31b03fc41 1-5982
+website/package.json
+  h_f90ee31b03fc41 1-7
+website/src/pages/index.astro
+  h_f90ee31b03fc41 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f8357b7d08c2fe0bf3c8ae3af87c847bd0b125f4",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
