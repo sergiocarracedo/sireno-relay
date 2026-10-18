@@ -1,0 +1,28 @@
+cli/internal/mcp/server_test.go
+  h_f90ee31b03fc41 31-33,37-39,46-52
+cli/internal/provider/fixture/fixture.go
+  h_f90ee31b03fc41 23,40-49,102-108
+cli/internal/provider/himalaya.go
+  h_f90ee31b03fc41 56-57
+cli/internal/provider/provider.go
+  h_f90ee31b03fc41 78-82,87
+cli/internal/relay/relay.go
+  h_f90ee31b03fc41 261
+cli/internal/relay/relay_test.go
+  h_f90ee31b03fc41 41-46
+cli/internal/view/view.go
+  h_f90ee31b03fc41 125
+cli/internal/view/view_test.go
+  h_f90ee31b03fc41 24-29,33-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9cd7483366dcc6df4bd6a001fd358f5e6f997031",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
