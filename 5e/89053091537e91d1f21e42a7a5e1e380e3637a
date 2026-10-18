@@ -1,0 +1,22 @@
+cli/internal/policy/policy.go
+  h_f90ee31b03fc41 129,132-133,136-138,140
+cli/internal/policy/policy_test.go
+  h_f90ee31b03fc41 12,23,26
+cli/internal/view/view_test.go
+  h_f90ee31b03fc41 122-143
+cli/main.go
+  h_f90ee31b03fc41 5,17,135,137-141,210,222-228,237,240,253-288
+cli/main_test.go
+  h_f90ee31b03fc41 80-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5e89053091537e91d1f21e42a7a5e1e380e3637a",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
