@@ -1,0 +1,18 @@
+cli/internal/mcp/safety_integration_test.go
+  h_f90ee31b03fc41 27,53,69,106,126,150,179,198,223,246
+cli/internal/provider/fixture/fixture.go
+  h_f90ee31b03fc41 1-2,27-28
+cli/internal/provider/fixture/fixture_test.go
+  h_f90ee31b03fc41 12,29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8181f5d4df1f3df5f8d5fcac3d26217042d6ad31",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
