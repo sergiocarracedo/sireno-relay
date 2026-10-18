@@ -131,8 +131,8 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 		return Page{}, errors.New("himalaya envelope listing failed")
 	}
 	type envelope struct {
-		ID    json.RawMessage `json:"id"`
-		Flags []string        `json:"flags"`
+		ID    json.RawMessage   `json:"id"`
+		Flags []json.RawMessage `json:"flags"`
 	}
 	var envelopes []envelope
 	if err := decodeJSONArray(output, "envelopes", &envelopes); err != nil {
@@ -230,12 +230,27 @@ func jsonID(value json.RawMessage) (string, error) {
 	return "", errors.New("missing ID")
 }
 
-func knownFlags(values []string) []Flag {
+func knownFlags(values []json.RawMessage) []Flag {
 	flags := make([]Flag, 0, len(values))
 	for _, value := range values {
-		switch Flag(strings.ToLower(value)) {
+		var name string
+		if json.Unmarshal(value, &name) != nil {
+			var wrapped struct {
+				Raw  string `json:"raw"`
+				IANA string `json:"iana"`
+			}
+			if json.Unmarshal(value, &wrapped) != nil {
+				continue
+			}
+			name = wrapped.IANA
+			if name == "" {
+				name = wrapped.Raw
+			}
+		}
+		name = strings.TrimPrefix(strings.ToLower(name), "\\")
+		switch Flag(name) {
 		case FlagSeen, FlagFlagged, FlagAnswered:
-			flags = append(flags, Flag(strings.ToLower(value)))
+			flags = append(flags, Flag(name))
 		}
 	}
 	return flags
