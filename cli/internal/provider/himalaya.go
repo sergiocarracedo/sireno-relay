@@ -79,11 +79,12 @@ func (h Himalaya) Folders(ctx context.Context, account config.Provider) ([]strin
 	if err != nil {
 		return nil, err
 	}
-	var items []struct {
+	type mailbox struct {
 		Name string `json:"name"`
 		ID   string `json:"id"`
 	}
-	if err := json.Unmarshal(output, &items); err != nil {
+	var items []mailbox
+	if err := decodeJSONArray(output, "mailboxes", &items); err != nil {
 		return nil, errors.New("invalid himalaya mailbox response")
 	}
 	folders := make([]string, 0, len(items))
@@ -129,11 +130,12 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 	if err != nil {
 		return Page{}, err
 	}
-	var envelopes []struct {
+	type envelope struct {
 		ID    json.RawMessage `json:"id"`
 		Flags []string        `json:"flags"`
 	}
-	if err := json.Unmarshal(output, &envelopes); err != nil {
+	var envelopes []envelope
+	if err := decodeJSONArray(output, "envelopes", &envelopes); err != nil {
 		return Page{}, errors.New("invalid himalaya envelope response")
 	}
 	if len(envelopes) > int(request.PageSize) {
@@ -155,6 +157,23 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 		messages = append(messages, Message{ID: id, Generation: request.Folder, Raw: raw, Flags: knownFlags(envelope.Flags)})
 	}
 	return Page{Messages: messages, HasMore: len(envelopes) == int(request.PageSize)}, nil
+}
+
+// decodeJSONArray accepts both Himalaya v2's named result object and the
+// bare-array format emitted by earlier supported releases.
+func decodeJSONArray[T any](output []byte, field string, result *[]T) error {
+	if err := json.Unmarshal(output, result); err == nil {
+		return nil
+	}
+	var wrapped map[string]json.RawMessage
+	if err := json.Unmarshal(output, &wrapped); err != nil {
+		return err
+	}
+	value, ok := wrapped[field]
+	if !ok {
+		return errors.New("missing result field")
+	}
+	return json.Unmarshal(value, result)
 }
 
 func (h Himalaya) Send(ctx context.Context, account config.Provider, _ string, _ []string, raw []byte) error {

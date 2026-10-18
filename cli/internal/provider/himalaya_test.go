@@ -81,7 +81,7 @@ func TestTemporaryHimalayaConfigIsOwnerOnlyAndCleanedUp(t *testing.T) {
 }
 
 func TestHimalayaFoldersUsesJSONAndDoesNotExposeConfigPath(t *testing.T) {
-	runner := &recordingRunner{output: []byte(`[{"name":"INBOX"},{"id":"archive"}]`)}
+	runner := &recordingRunner{output: []byte(`{"mailboxes":[{"name":"INBOX"},{"id":"archive"}]}`)}
 	account := config.Provider{
 		Address: "owner@example.org",
 		IMAP:    config.Server{Address: "imap.example.org:993", Username: "owner@example.org", Password: config.Password{Value: "upstream-password"}},
@@ -121,7 +121,7 @@ func TestHimalayaDoesNotAdvertiseUnprovenWrites(t *testing.T) {
 
 func TestHimalayaPageUsesBoundedSearchAndTargetedReads(t *testing.T) {
 	runner := &sequenceRunner{outputs: [][]byte{
-		[]byte(`[{"id":42,"flags":["seen"]}]`),
+		[]byte(`{"envelopes":[{"id":42,"flags":["seen"]}]}`),
 		[]byte("From: sender@example.org\r\nSubject: Receipt\r\n\r\nBody"),
 	}}
 	account := config.Provider{Address: "owner@example.org", IMAP: config.Server{Address: "imap:993", Username: "owner", Password: config.Password{Value: "secret"}}, SMTP: config.Server{Address: "smtp:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}}}
@@ -131,6 +131,23 @@ func TestHimalayaPageUsesBoundedSearchAndTargetedReads(t *testing.T) {
 	}
 	if len(runner.args) != 2 || !containsSequence(runner.args[0], "envelope", "search", "--mailbox", "INBOX", "--page", "2", "--page-size", "20", "from", "billing@example.org") || !containsSequence(runner.args[1], "message", "read", "--mailbox", "INBOX", "--raw", "42") {
 		t.Fatalf("unexpected commands: %#v", runner.args)
+	}
+}
+
+func TestDecodeJSONArrayAcceptsHimalayaV2AndLegacyResults(t *testing.T) {
+	type item struct {
+		Name string `json:"name"`
+	}
+	for name, output := range map[string]string{
+		"v2 wrapper":   `{"mailboxes":[{"name":"INBOX"}]}`,
+		"legacy array": `[ {"name":"INBOX"} ]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var items []item
+			if err := decodeJSONArray([]byte(output), "mailboxes", &items); err != nil || len(items) != 1 || items[0].Name != "INBOX" {
+				t.Fatalf("items=%#v err=%v", items, err)
+			}
+		})
 	}
 }
 
