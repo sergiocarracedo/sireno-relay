@@ -27,6 +27,7 @@ func TestFixturePaginationHidesDeniedCandidates(t *testing.T) {
 	// A denied message must not consume a page slot or reveal its metadata.
 	path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 	p := fixture.New()
+	p.FoldersValue = []string{"INBOX"}
 	p.PagesByAddress["home@example.org"] = map[string][][]provider.Message{
 		"INBOX": {
 			{{ID: "hidden", Generation: "home-1", Raw: rawMessage("hidden@example.org", "Secret", "No")}},
@@ -49,6 +50,28 @@ func TestFixturePaginationHidesDeniedCandidates(t *testing.T) {
 }
 
 func TestFixtureConstraintSuite(t *testing.T) {
+	t.Run("unknown folders suggest only visible alternatives", func(t *testing.T) {
+		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content = []byte(strings.Replace(string(content), `folders: {allow: ["rw:INBOX"]}`, `folders: {allow: ["ro:Agent/Inbox"]}`, 1))
+		if err := os.WriteFile(path, content, 0600); err != nil {
+			t.Fatal(err)
+		}
+		p := seededFixture()
+		p.FoldersByAddress["home@example.org"] = []string{"Agent/Inbox", "Private"}
+		r := fixtureRelay(t, path, p)
+		_, _, err = messagesWithCursors(r, newCursorStore())(fixtureContext(fixtureIdentity(t, r, homeToken)), nil, listMessagesArgs{Folder: "INBOX"})
+		if err == nil || err.Error() != `folder unavailable; available folders: "Agent/Inbox"` {
+			t.Fatalf("error=%v", err)
+		}
+		if got := len(p.PageCallSnapshot()); got != 0 {
+			t.Fatalf("unknown folder reached provider page %d times", got)
+		}
+	})
+
 	t.Run("unauthenticated attachment requests never reach the provider", func(t *testing.T) {
 		// Reject unauthenticated requests before any mailbox access.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
