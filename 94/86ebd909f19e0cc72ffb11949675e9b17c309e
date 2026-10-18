@@ -1,0 +1,54 @@
+README.md
+  h_f90ee31b03fc41 9,20-21,24-25,39,41,44-45,48,60
+cli/internal/audit/audit.go
+  h_f90ee31b03fc41 175-176,185,187,190,197,228,230,233,235-241,243,250
+cli/internal/audit/audit_test.go
+  h_f90ee31b03fc41 14,25,34
+cli/internal/config/config.go
+  h_f90ee31b03fc41 75-81,166,170-172
+cli/internal/config/write.go
+  h_f90ee31b03fc41 1-134
+cli/internal/config/write_test.go
+  h_f90ee31b03fc41 1-41
+cli/internal/onboard/onboard.go
+  h_f90ee31b03fc41 1-308
+cli/internal/onboard/onboard_test.go
+  h_f90ee31b03fc41 1-107
+cli/internal/policy/policy.go
+  h_f90ee31b03fc41 126-128,132-135,152,164
+cli/internal/policy/policy_test.go
+  h_f90ee31b03fc41 57
+cli/internal/view/view.go
+  h_f90ee31b03fc41 182
+cli/internal/view/view_test.go
+  h_f90ee31b03fc41 144-160
+cli/main.go
+  h_f90ee31b03fc41 23,31,36,82,86,104-115,149,164-217,241-243
+cli/main_test.go
+  h_f90ee31b03fc41 55-66
+config.example.yml
+  h_f90ee31b03fc41 58-59
+docs/configuration.md
+  h_f90ee31b03fc41 3,7,10-22,24-25,35-38,44,74,95-97,101,103-107,109,111,123,144-150
+docs/operations.md
+  h_f90ee31b03fc41 6
+docs/policy.md
+  h_f90ee31b03fc41 12
+docs/public/configuration.md
+  h_f90ee31b03fc41 7-15,26-30
+docs/public/onboarding.md
+  h_f90ee31b03fc41 1-28
+website/src/pages/index.astro
+  h_f90ee31b03fc41 26,28-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9486ebd909f19e0cc72ffb11949675e9b17c309e",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
