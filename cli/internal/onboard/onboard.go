@@ -40,7 +40,7 @@ func Run(ctx context.Context, options Options) (string, error) {
 		return "", errors.New("onboarding paths are required")
 	}
 	if _, err := os.Stat(options.MarkerPath); err == nil {
-		return "", fmt.Errorf("onboarding is already complete; edit %s or use `sireno-relay user token rotate --user <name>`", options.ConfigPath)
+		return "", fmt.Errorf("onboarding is already complete; edit %s or use `sirenorelay user token rotate --user <name>`", options.ConfigPath)
 	}
 	if _, err := os.Stat(options.ConfigPath); err == nil {
 		return "", fmt.Errorf("configuration already exists at %s; onboarding will not overwrite it", options.ConfigPath)
@@ -135,7 +135,7 @@ func Run(ctx context.Context, options Options) (string, error) {
 		return "", err
 	}
 	complete = true
-	fmt.Fprintf(options.Output, "\nOnboarding complete. Give this bearer token to the agent once:\n%s\n\nRotate it later with: sireno-relay user token rotate --user %s --config %s\n", token, user, options.ConfigPath)
+	fmt.Fprintf(options.Output, "\nOnboarding complete. Give this bearer token to the agent once:\n%s\n\nRotate it later with: sirenorelay user token rotate --user %s --config %s\n", token, user, options.ConfigPath)
 	return token, nil
 }
 

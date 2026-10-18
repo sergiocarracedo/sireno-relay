@@ -1,27 +1,40 @@
-# Sireno AI Relay
+# SirenoRELAY
 
-Sireno gives an agent a restricted, token-authenticated MCP mail view. It is a deterministic access boundary: folders and messages denied by policy are absent from the agent's view, including virtual message IDs.
+SirenoRELAY gives an agent a restricted, token-authenticated MCP mail view. It is a deterministic access boundary: folders and messages denied by policy are absent from the agent's view, including virtual message IDs.
 
-> This is an early v1 implementation. Himalaya is the only upstream provider and Sireno binds its MCP listener to loopback. POP3, OAuth, remote clients, and non-email relays are intentionally out of scope.
+> This is an early v1 implementation. Himalaya is the only upstream provider and SirenoRELAY binds its MCP listener to loopback. POP3, OAuth, remote clients, and non-email relays are intentionally out of scope.
 
 ## Prerequisite: Himalaya
 
-Install the [Himalaya CLI](https://github.com/pimalaya/himalaya#installation). Sireno verifies it is available in `PATH`. Sireno uses its own YAML configuration; it does not read Himalaya's TOML accounts.
+Install the [Himalaya CLI](https://github.com/pimalaya/himalaya#installation). SirenoRELAY verifies it is available in `PATH`. SirenoRELAY uses its own YAML configuration; it does not read Himalaya's TOML accounts.
 
 ## Security model
 
-Run Sireno under an owner OS account. Agent processes must not be able to read the owner configuration, local state, upstream credentials, or directly reach the upstream mail provider. Sireno cannot constrain an agent that already holds provider credentials.
+Run SirenoRELAY under an owner OS account. Agent processes must not be able to read the owner configuration, local state, upstream credentials, or directly reach the upstream mail provider. SirenoRELAY cannot constrain an agent that already holds provider credentials.
 
 The relay fails closed: unsupported MIME, malformed mail, oversized mail, failed scanners, and policy reloads that make a selected mailbox ambiguous do not expose the original message. Logical invisibility does not prevent timing side channels or revoke mail an agent already retrieved.
 
 ## Quick start
 
+After the first release publishes the Homebrew formula, install SirenoRELAY
+and its Himalaya dependency on macOS or Linux:
+
 ```sh
-sireno-relay onboard
-sireno-relay serve
+brew install sergiocarracedo/tap/sirenorelay
 ```
 
-`onboard` supports IMAP/SMTP accounts and verifies them by listing live folders. Use ↑/↓ to move, Space to select folders, and Enter to continue. A failed connection lets you correct the provider settings. It writes an owner-only configuration at `~/.config/sireno-relay/config.yml`, owner-only upstream secret files, and an onboarding marker at `~/.config/sireno-relay/onboard`. For another Himalaya backend or a non-interactive setup, use `config.example.yml` and the manual configuration reference.
+Until then, build from source with `make build`. To have an agent guide the
+owner-side setup, install the skill in the agent environment with
+`npx skills add sergiocarracedo/sireno-relay --skill sirenorelay` and ask it to
+use the skill; keep upstream credentials and relay configuration out of the
+agent's reach.
+
+```sh
+sirenorelay onboard
+sirenorelay serve
+```
+
+`onboard` supports IMAP/SMTP accounts and verifies them by listing live folders. Use ↑/↓ to move, Space to select folders, and Enter to continue. A failed connection lets you correct the provider settings. It writes an owner-only configuration at `~/.config/sirenorelay/config.yml`, owner-only upstream secret files, and an onboarding marker at `~/.config/sirenorelay/onboard`. For another Himalaya backend or a non-interactive setup, use `config.example.yml` and the manual configuration reference.
 
 Give the agent only the MCP endpoint and the bearer token whose SHA-256 hash is
 stored in its `users` entry. The agent calls the discovered MCP tools with
@@ -54,31 +67,38 @@ Link removal replaces links with `[link removed]` and does not retain their targ
 ## Owner commands
 
 ```sh
-sireno-relay config-check --config config.yml
-sireno-relay policy-check --config config.yml --user hermes-agent --folder INBOX/Invoices
-sireno-relay serve --config config.yml
-sireno-relay user token rotate --user hermes-agent --config config.yml
+sirenorelay config-check --config config.yml
+sirenorelay policy-check --config config.yml --user hermes-agent --folder INBOX/Invoices
+sirenorelay serve --config config.yml
+sirenorelay user token rotate --user hermes-agent --config config.yml
 ```
 
 `policy-check` evaluates real upstream mail but prints only a visible count—not subjects or bodies. Configuration/state files are owner-only; do not run these owner commands in an agent environment.
 
 ## CLI tooling
 
-Sireno provides structured help and shell completion:
+SirenoRELAY provides structured help and shell completion:
 
 ```sh
-sireno-relay --help
-sireno-relay completion zsh > "${fpath[1]}/_sireno-relay"
-sireno-relay completion bash > "$(brew --prefix)/etc/bash_completion.d/sireno-relay"
-sireno-relay version
+sirenorelay --help
+sirenorelay completion zsh > "${fpath[1]}/_sirenorelay"
+sirenorelay completion bash > "$(brew --prefix)/etc/bash_completion.d/sirenorelay"
+sirenorelay version
+sirenorelay --version
 ```
 
-For source builds, use `make build`, `make test`, `make vet`, `make check`, or `make install`. Run `make hooks` once after cloning to enable the repository's pre-commit quality gate. The build embeds the current Git version in `sireno-relay version`; release builds can override it with `make build VERSION=v1.2.3`.
+For source builds, use `make build`, `make test`, `make vet`, `make check`, or `make install`. Run `make hooks` once after cloning to enable the repository's pre-commit quality gate. The build embeds the current Git version in `sirenorelay version`; release builds can override it with `make build VERSION=v1.2.3`.
 
-CLI flags can also be supplied as `SIRENO_*` environment variables when a command defines the matching flag: for example, `SIRENO_CONFIG=/secure/sireno.yml sireno-relay config-check`. Relay policy and upstream credentials always come only from the strictly validated YAML file.
+## Releases
+
+Release Please proposes version/changelog updates on `main` using Conventional Commits. Merging its release PR creates a `vX.Y.Z` tag and draft GitHub release. The tag workflow validates the Go CLI and website, builds Linux/macOS amd64/arm64 archives with checksums, publishes the release, and updates the `sirenorelay` formula in `sergiocarracedo/homebrew-tap`. No release is published if verification fails. The release version lives in `VERSION`; local builds still use Git description.
+
+The repository needs `RELEASE_PLEASE_TOKEN` (write access to this repository's contents and pull requests) and `HOMEBREW_TAP_GITHUB_TOKEN` (write access to the tap). The first secret must be a token that triggers downstream tag workflows, not the default Actions token. The tap token is only supplied to the publishing step. Once a release and formula are published, install with `brew install sergiocarracedo/tap/sirenorelay`; Himalaya is installed as a formula dependency.
+
+CLI flags can also be supplied as `SIRENO_*` environment variables when a command defines the matching flag: for example, `SIRENO_CONFIG=/secure/sireno.yml sirenorelay config-check`. Relay policy and upstream credentials always come only from the strictly validated YAML file.
 
 ## Operations
 
-Run `sireno-relay serve` in the foreground for development; Ctrl+C closes the MCP listener. For a persistent installation, use the included user service example after installing a compiled binary. Do not bind to non-loopback addresses in v1.
+Run `sirenorelay serve` in the foreground for development; Ctrl+C closes the MCP listener. For a persistent installation, use the included user service example after installing a compiled binary. Do not bind to non-loopback addresses in v1.
 
 See `docs/configuration.md`, `docs/policy.md`, `docs/security.md`, and `docs/operations.md` for details.

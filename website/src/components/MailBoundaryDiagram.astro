@@ -1,0 +1,161 @@
+<section class="scenario" aria-labelledby="scenario-title" data-mail-demo>
+  <div class="scenario-heading">
+    <p class="eyebrow">ONE REQUEST · TWO OUTCOMES</p>
+    <h2 id="scenario-title">Find the invoices. Send them to the financial assistant.</h2>
+    <p>Compare the same task with SirenoRELAY or with an agent connected directly to the mailbox.</p>
+  </div>
+
+  <div class="demo-tabs" role="tablist" aria-label="Mailbox access model">
+    <button id="tab-protected" type="button" role="tab" aria-selected="true" aria-controls="panel-protected" tabindex="0" data-select-case="protected"><span class="tab-relay">With Sireno<span>RELAY</span></span><small>Policy-filtered MCP access</small></button>
+    <button id="tab-direct" type="button" role="tab" aria-selected="false" aria-controls="panel-direct" tabindex="-1" data-select-case="direct"><span>Direct access to Mailbox</span><small>Agent holds mailbox credentials</small></button>
+  </div>
+
+  <section id="panel-protected" class="case-panel" role="tabpanel" aria-labelledby="tab-protected" data-case-panel="protected">
+    <div class="flow-console" data-case="protected">
+      <div class="flow-controls">
+        <div class="flow-steps" role="group" aria-label="SirenoRELAY flow steps">
+          <button type="button" data-case-step="0" aria-current="step"><span>01</span> List folders</button>
+          <button type="button" data-case-step="1"><span>02</span> List mail</button>
+          <button type="button" data-case-step="2"><span>03</span> Send safely</button>
+        </div>
+        <div class="flow-playback"><button type="button" data-play aria-pressed="false">Pause</button><button type="button" data-replay>Replay</button></div>
+      </div>
+      <div class="flow-nodes" aria-hidden="true"><span>OWNER MAILBOX</span><i class="flow-wire"></i><span class="flow-node-relay">Sireno<span>RELAY</span> · MCP</span><i class="flow-wire"></i><span>AGENT</span></div>
+      <div class="flow-stage">
+        <div class="mailbox" role="group" aria-label="Owner mailbox">
+          <div class="mailbox-top"><span>MAILBOX</span><span>upstream · credentials stay here</span></div>
+          <section class="folder folder--invoices">
+            <h3 tabindex="0" data-visibility="Visible to agent · folder allowed" aria-label="Invoices folder: visible to agent, folder allowed"><span class="folder-name"><svg class="folder-icon" viewBox="0 0 16 13" aria-hidden="true"><path d="M1 2.5h5l1.4 1.7H15v7.3H1z"/><path d="M1 4.2h14"/></svg>Invoices</span><em>3 messages</em></h3>
+            <p class="mail-row mail-row--allowed" tabindex="0" data-visibility="Visible to agent · sender allowed" aria-label="April invoice from billing at vendor dot test: visible to agent, sender allowed"><i class="sender">billing@vendor.test</i><b>April invoice · €420</b><svg class="email-flow-arrow" viewBox="0 0 72 12" aria-hidden="true"><path d="M1 6h63m0 0-5-4m5 4-5 4"/></svg></p>
+            <p class="mail-row mail-row--hidden" tabindex="0" data-visibility="Hidden from agent · sender denied" aria-label="Newsletter from newsletter at vendor dot test: hidden from agent, sender denied"><i class="sender">newsletter@vendor.test</i><b>Hidden · sender not allowed</b></p>
+            <p class="mail-row mail-row--allowed" tabindex="0" data-visibility="Visible to agent · sender allowed" aria-label="March invoice from billing at vendor dot test: visible to agent, sender allowed"><i class="sender">billing@vendor.test</i><b>March invoice · €380</b><svg class="email-flow-arrow" viewBox="0 0 72 12" aria-hidden="true"><path d="M1 6h63m0 0-5-4m5 4-5 4"/></svg></p>
+          </section>
+          <section class="folder folder--personal"><h3 tabindex="0" data-visibility="Hidden from agent · folder denied" aria-label="Personal folder: hidden from agent, folder denied"><span class="folder-name"><svg class="folder-icon" viewBox="0 0 16 13" aria-hidden="true"><path d="M1 2.5h5l1.4 1.7H15v7.3H1z"/><path d="M1 4.2h14"/></svg>Personal</span><em>hidden</em></h3><p class="mail-row" tabindex="0" data-visibility="Hidden from agent · folder denied" aria-label="Private conversation from friend at example dot test: hidden from agent, folder denied"><i class="sender">friend@example.test</i><b>Private conversation</b></p></section>
+        </div>
+        <div class="policy-gate" role="group" aria-label="SirenoRELAY authorization boundary"><b>Sireno<span>RELAY</span></b><span>auth</span><span>folder policy</span><span>sender policy</span><span>recipient policy</span><small>UPSTREAM CREDS<br />NEVER SENT TO AGENT</small></div>
+        <div class="agent-panel" role="group" aria-label="Agent and MCP activity">
+          <div class="agent-head"><b>AGENT</b><small>connected with bearer token</small></div>
+          <div class="activity" data-case-activity="0" aria-live="polite"><p class="task-prompt">“Find the invoices and send them to my financial assistant.”</p><div class="tool-call"><span>TOOL CALL</span><code>list_folders</code><small>agent → SirenoRELAY</small></div><div class="tool-result"><span>VISIBLE FOLDERS</span><b><svg class="folder-icon" viewBox="0 0 16 13" aria-hidden="true"><path d="M1 2.5h5l1.4 1.7H15v7.3H1z"/><path d="M1 4.2h14"/></svg> Invoices</b><b>Sent / Reports</b><small>Personal is not returned.</small></div></div>
+          <div class="activity" data-case-activity="1" hidden aria-live="polite"><div class="tool-call"><span>TOOL CALL</span><code>list_messages</code><small>folder: Invoices</small></div><div class="tool-result"><span>VISIBLE MAIL</span><b>April invoice · €420</b><b>March invoice · €380</b><small>Unapproved sender is filtered out.</small></div><p class="agent-note">Only returned messages can be read.</p></div>
+          <div class="activity" data-case-activity="2" hidden aria-live="polite"><p class="task-prompt">The agent composes an invoice summary.</p><div class="tool-call"><span>TOOL CALL</span><code>send_message</code><small>agent → SirenoRELAY</small></div><p class="send-attempt send-attempt--denied"><b>✕ finances@wrong.test</b><small>Denied before delivery by outbound policy</small></p><p class="send-attempt send-attempt--allowed"><b>✓ assistant@ledger.test</b><small>Allowed retry · handed to upstream mail server</small></p></div>
+        </div>
+      </div>
+      <p class="flow-caption" data-case-caption aria-live="polite">SirenoRELAY returns only folders permitted by the agent's policy.</p>
+    </div>
+  </section>
+
+  <section id="panel-direct" class="case-panel" role="tabpanel" aria-labelledby="tab-direct" data-case-panel="direct" hidden>
+    <div class="flow-console flow-console--direct" data-case="direct">
+      <div class="flow-controls">
+        <div class="flow-steps" role="group" aria-label="Direct mailbox flow steps"><button type="button" data-case-step="0" aria-current="step"><span>01</span> List folders</button><button type="button" data-case-step="1"><span>02</span> List mail</button><button type="button" data-case-step="2"><span>03</span> Send email</button></div>
+        <div class="flow-playback"><button type="button" data-play aria-pressed="false">Pause</button><button type="button" data-replay>Replay</button></div>
+      </div>
+      <div class="flow-nodes flow-nodes--direct" aria-hidden="true"><span>MAILBOX</span><i class="flow-wire flow-wire--unsafe"></i><span class="flow-node-direct">DIRECT CONNECTION</span><i class="flow-wire flow-wire--unsafe"></i><span>AGENT</span></div>
+      <div class="flow-stage flow-stage--direct">
+        <div class="mailbox" role="group" aria-label="Mailbox accessed directly by agent">
+          <div class="mailbox-top"><span>MAILBOX</span><span>credentials shared with agent</span></div>
+          <section class="folder folder--invoices"><h3 tabindex="0" data-visibility="Visible to agent · direct mailbox access" aria-label="Invoices folder: visible to agent through direct mailbox access"><span class="folder-name"><svg class="folder-icon" viewBox="0 0 16 13" aria-hidden="true"><path d="M1 2.5h5l1.4 1.7H15v7.3H1z"/><path d="M1 4.2h14"/></svg>Invoices</span><em>3 messages</em></h3><p class="mail-row" tabindex="0" data-visibility="Visible to agent · direct mailbox access" aria-label="April invoice: visible to agent through direct mailbox access"><i class="sender">billing@vendor.test</i><b>April invoice · €420</b><svg class="email-flow-arrow" viewBox="0 0 72 12" aria-hidden="true"><path d="M1 6h63m0 0-5-4m5 4-5 4"/></svg></p><p class="mail-row mail-row--danger" tabindex="0" data-visibility="Visible to agent · no sender filter" aria-label="Unwanted promotion: visible to agent, no sender filter"><i class="sender">newsletter@vendor.test</i><b>Unwanted promotion</b><svg class="email-flow-arrow" viewBox="0 0 72 12" aria-hidden="true"><path d="M1 6h63m0 0-5-4m5 4-5 4"/></svg></p><p class="mail-row" tabindex="0" data-visibility="Visible to agent · direct mailbox access" aria-label="March invoice: visible to agent through direct mailbox access"><i class="sender">billing@vendor.test</i><b>March invoice · €380</b><svg class="email-flow-arrow" viewBox="0 0 72 12" aria-hidden="true"><path d="M1 6h63m0 0-5-4m5 4-5 4"/></svg></p></section>
+          <section class="folder folder--personal"><h3 tabindex="0" data-visibility="Visible to agent · no folder filter" aria-label="Personal folder: visible to agent, no folder filter"><span class="folder-name"><svg class="folder-icon" viewBox="0 0 16 13" aria-hidden="true"><path d="M1 2.5h5l1.4 1.7H15v7.3H1z"/><path d="M1 4.2h14"/></svg>Personal</span><em>also visible</em></h3><p class="mail-row mail-row--danger" tabindex="0" data-visibility="Visible to agent · no folder filter" aria-label="Private conversation: visible to agent, no folder filter"><i class="sender">friend@example.test</i><b>Private conversation</b><svg class="email-flow-arrow" viewBox="0 0 72 12" aria-hidden="true"><path d="M1 6h63m0 0-5-4m5 4-5 4"/></svg></p></section>
+        </div>
+        <div class="direct-link" aria-hidden="true"><b>IMAP / SMTP</b><span>no policy boundary</span><small>password available<br />to the agent</small></div>
+        <div class="agent-panel" role="group" aria-label="Agent directly connected to mailbox"><div class="agent-head"><b>AGENT</b><small>has mailbox credentials</small></div>
+          <div class="activity" data-case-activity="0" aria-live="polite"><p class="task-prompt">“Find the invoices and send them to my financial assistant.”</p><div class="tool-call tool-call--direct"><span>DIRECT REQUEST</span><code>list all folders</code><small>agent → mailbox · credentials used directly</small></div><div class="tool-result"><span>FOLDERS VISIBLE TO AGENT</span><b>Invoices</b><b>Personal</b><b>Sent / Reports</b><small>No relay policy filters this list.</small></div></div>
+          <div class="activity" data-case-activity="1" hidden aria-live="polite"><div class="tool-call tool-call--direct"><span>DIRECT REQUEST</span><code>read mailbox</code><small>agent can fetch every message</small></div><div class="tool-result"><span>MAIL VISIBLE TO AGENT</span><b>April invoice · €420</b><b>Unwanted promotion</b><b>Private conversation</b><small>All folders and senders are accessible.</small></div><p class="agent-note agent-note--danger">Private mail and unrelated senders are exposed to the agent.</p></div>
+          <div class="activity" data-case-activity="2" hidden aria-live="polite"><p class="task-prompt">The agent sends without a relay policy check.</p><div class="tool-call tool-call--direct"><span>DIRECT SMTP SEND</span><code>finances@wrong.test</code><small>agent → mail server</small></div><p class="send-attempt send-attempt--denied"><b>! Sent to finances@wrong.test</b><small>No SirenoRELAY recipient rule blocks this send.</small></p></div>
+        </div>
+      </div>
+      <p class="flow-caption" data-case-caption aria-live="polite">The agent connects to the mailbox itself and receives the complete folder list.</p>
+    </div>
+  </section>
+  <noscript><p class="flow-noscript">With SirenoRELAY, an agent sees only allowed folders and messages, and unauthorized sends are blocked. Direct mailbox access exposes the full mailbox and has no SirenoRELAY recipient check.</p></noscript>
+
+  <script>
+    const demo = document.querySelector("[data-mail-demo]");
+    if (demo) {
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const tabs = [...demo.querySelectorAll("[data-select-case]")];
+      const panels = [...demo.querySelectorAll("[data-case-panel]")];
+      const cases = [...demo.querySelectorAll("[data-case]")];
+      const captions = {
+        protected: ["SirenoRELAY returns only folders permitted by the agent's policy.", "Only allowed sender messages in Invoices are returned to the agent.", "SirenoRELAY rejects the wrong recipient before delivery; the allowed retry is sent."],
+        direct: ["The agent connects to the mailbox itself and receives the complete folder list.", "Every email in every folder can flow to the agent, including private and unwanted messages.", "The agent sends directly to SMTP; no SirenoRELAY recipient rule blocks the wrong address."],
+      };
+      let activeCase = "protected";
+      let step = 0;
+      let timer;
+      let playing = false;
+      let manuallyPaused = false;
+      const clearTimer = () => { window.clearTimeout(timer); timer = undefined; };
+      const setCase = (key) => {
+        activeCase = key;
+        demo.dataset.activeCase = key;
+        tabs.forEach((tab) => {
+          const selected = tab.dataset.selectCase === key;
+          tab.setAttribute("aria-selected", String(selected));
+          tab.tabIndex = selected ? 0 : -1;
+        });
+        panels.forEach((panel) => panel.hidden = panel.dataset.casePanel !== key);
+        cases.forEach((item) => { item.hidden = item.dataset.case !== key; });
+        step = 0;
+        setStep(0);
+        cases.forEach((item) => { const button = item.querySelector("[data-play]"); if (button) { button.textContent = playing ? "Pause" : "Play"; button.setAttribute("aria-pressed", String(!playing)); } });
+      };
+      const setStep = (next) => {
+        step = next;
+        const current = cases.find((item) => item.dataset.case === activeCase);
+        if (!current) return;
+        current.dataset.activeStep = String(next);
+        current.querySelectorAll("[data-case-step]").forEach((button) => {
+          if (Number(button.dataset.caseStep) === next) button.setAttribute("aria-current", "step");
+          else button.removeAttribute("aria-current");
+        });
+        current.querySelectorAll("[data-case-activity]").forEach((activity) => activity.hidden = Number(activity.dataset.caseActivity) !== next);
+        const caption = current.querySelector("[data-case-caption]");
+        if (caption) caption.textContent = captions[activeCase][next];
+      };
+      const updatePlayButtons = () => cases.forEach((item) => {
+        const button = item.querySelector("[data-play]");
+        if (button) { button.textContent = playing ? "Pause" : "Play"; button.setAttribute("aria-pressed", String(!playing)); }
+      });
+      const stop = () => { clearTimer(); playing = false; updatePlayButtons(); };
+      const advance = () => {
+        if (!playing) return;
+        if (step < 2) { setStep(step + 1); timer = window.setTimeout(advance, 4200); }
+        else { timer = window.setTimeout(() => { setCase(activeCase === "protected" ? "direct" : "protected"); timer = window.setTimeout(advance, 4200); }, 5000); }
+      };
+      const start = () => { if (reduced || manuallyPaused) return; clearTimer(); playing = true; updatePlayButtons(); timer = window.setTimeout(advance, 4200); };
+      const resumeAfterInteraction = () => { if (reduced || manuallyPaused) return; stop(); timer = window.setTimeout(start, 5000); };
+      demo.classList.add("demo-ready");
+      tabs.forEach((tab, index) => {
+        tab.addEventListener("click", () => { clearTimer(); setCase(tab.dataset.selectCase); resumeAfterInteraction(); });
+        tab.addEventListener("keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const target = event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
+          target.focus(); target.click();
+        });
+      });
+      cases.forEach((item) => {
+        item.querySelectorAll("[data-case-step]").forEach((button) => button.addEventListener("click", () => { clearTimer(); setCase(item.dataset.case); setStep(Number(button.dataset.caseStep)); resumeAfterInteraction(); }));
+        item.querySelector("[data-play]")?.addEventListener("click", () => {
+          if (playing) { manuallyPaused = true; stop(); }
+          else { manuallyPaused = false; start(); }
+        });
+        item.querySelector("[data-replay]")?.addEventListener("click", () => { manuallyPaused = false; setCase(item.dataset.case); start(); });
+        const mailbox = item.querySelector(".mailbox");
+        mailbox?.addEventListener("pointerenter", stop);
+        mailbox?.addEventListener("pointerleave", resumeAfterInteraction);
+        mailbox?.addEventListener("focusin", stop);
+        mailbox?.addEventListener("focusout", (event) => { if (!mailbox.contains(event.relatedTarget)) resumeAfterInteraction(); });
+      });
+      demo.addEventListener("pointerdown", (event) => { if (event.target.closest("button")) return; resumeAfterInteraction(); }, { passive: true });
+      setCase("protected");
+      if (!reduced) {
+        const observer = new IntersectionObserver((entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) { observer.disconnect(); start(); }
+        }, { threshold: 0.2 });
+        observer.observe(demo);
+      }
+    }
+  </script>
+</section>

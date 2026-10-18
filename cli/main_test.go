@@ -59,8 +59,16 @@ func TestMissingConfigurationGuidesOwnerToOnboard(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing.yml")
 	var out bytes.Buffer
 	err := run([]string{"config-check", "--config", path}, &out)
-	if err == nil || !strings.Contains(err.Error(), "sireno-relay onboard") {
+	if err == nil || !strings.Contains(err.Error(), "sirenorelay onboard") {
 		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestDefaultConfigPathUsesSirenorelayConfigDirectory(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	if got, want := defaultConfigPath(), filepath.Join(configHome, "sirenorelay", "config.yml"); got != want {
+		t.Fatalf("defaultConfigPath()=%q, want %q", got, want)
 	}
 }
 
@@ -73,7 +81,7 @@ func TestCommandTooling(t *testing.T) {
 	if err := run([]string{"completion", "bash"}, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "sireno-relay") {
+	if !strings.Contains(out.String(), "sirenorelay") {
 		t.Fatalf("completion did not mention command: %q", out.String())
 	}
 	out.Reset()
@@ -87,6 +95,20 @@ func TestCommandTooling(t *testing.T) {
 		t.Fatal("unexpected positional argument was accepted")
 	} else if _, ok := err.(usageError); !ok {
 		t.Fatalf("error = %T, want usageError", err)
+	}
+}
+
+func TestVersionFlag(t *testing.T) {
+	previous := findExecutable
+	findExecutable = func(string) (string, error) { return "", os.ErrNotExist }
+	t.Cleanup(func() { findExecutable = previous })
+
+	var out bytes.Buffer
+	if err := run([]string{"--version"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := out.String(), version+"\n"; got != want {
+		t.Fatalf("--version = %q, want %q", got, want)
 	}
 }
 

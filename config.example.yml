@@ -59,7 +59,7 @@ listen:
 # MCP request/response content, bearer tokens, credentials, or attachment bytes.
 logging:
   level: info
-  target: /var/log/sireno-relay/audit.jsonl
+  target: /var/log/sirenorelay/audit.jsonl
   rotation:
     retention_days: 7
     max_file_size: 100MiB

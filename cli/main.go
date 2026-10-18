@@ -69,11 +69,13 @@ func run(args []string, out io.Writer) error {
 
 func newRootCmd(out, errOut io.Writer) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "sireno-relay",
+		Use:           "sirenorelay",
 		Short:         "Run a policy-enforced local email relay",
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	root.SetVersionTemplate("{{.Version}}\n")
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
@@ -105,14 +107,11 @@ func configFlag(v *viper.Viper, cmd *cobra.Command) {
 }
 
 func defaultConfigPath() string {
-	if _, err := os.Stat("config.yml"); err == nil {
-		return "config.yml"
-	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "config.yml"
 	}
-	return filepath.Join(dir, "sireno-relay", "config.yml")
+	return filepath.Join(dir, "sirenorelay", "config.yml")
 }
 
 func newConfigCheckCmd(v *viper.Viper) *cobra.Command {
@@ -171,7 +170,7 @@ func newOnboardCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		_, err = onboard.Run(cmd.Context(), onboard.Options{ConfigPath: path, MarkerPath: filepath.Join(dir, "sireno-relay", "onboard"), Input: os.Stdin, Output: cmd.OutOrStdout(), ReadSecret: terminalSecret, TextPrompt: onboard.PromptText})
+		_, err = onboard.Run(cmd.Context(), onboard.Options{ConfigPath: path, MarkerPath: filepath.Join(dir, "sirenorelay", "onboard"), Input: os.Stdin, Output: cmd.OutOrStdout(), ReadSecret: terminalSecret, TextPrompt: onboard.PromptText})
 		return err
 	}}
 }
@@ -239,7 +238,7 @@ func loadConfig(path string, out io.Writer) (*config.Config, []string, error) {
 	cfg, warnings, err := config.Load(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil, errors.New("no configuration found; run `sireno-relay onboard`")
+			return nil, nil, errors.New("no configuration found; run `sirenorelay onboard`")
 		}
 		return nil, nil, err
 	}

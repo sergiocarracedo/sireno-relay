@@ -1,0 +1,23 @@
+---
+import type { CollectionEntry } from "astro:content";
+import BrandLink from "./BrandLink.astro";
+import SiteLayout from "../layouts/SiteLayout.astro";
+import { docs, slug } from "../lib/docs";
+import { withBase } from "../lib/with-base";
+
+const { entry, entries, Content, headings = [] } = Astro.props as { entry: CollectionEntry<"docs">; entries: CollectionEntry<"docs">[]; Content: any; headings?: Array<{ depth: number; slug: string; text: string }> };
+const current = slug(entry);
+---
+
+<SiteLayout title={`${entry.data.title} — SirenoRELAY`} description={entry.data.description || `SirenoRELAY ${entry.data.title} documentation.`}>
+  <header class="site-header shell"><BrandLink /><nav><a href={withBase("/docs")}>Docs</a><a href="https://github.com/sergiocarracedo/sireno-relay">GitHub ↗</a></nav></header>
+  <div class="docs-context shell"><a href={withBase("/docs")}>DOCUMENTATION</a><span aria-hidden="true">›</span><strong>{entry.data.title}</strong></div>
+  <main class="shell docs-page">
+    <header class="docs-header"><p class="eyebrow">DOCUMENTATION</p><h1>{entry.data.title}</h1>{entry.data.description && <p>{entry.data.description}</p>}</header>
+    <div class="docs-layout">
+      <nav class="docs-nav" aria-label="Documentation navigation">{docs(entries).map((item) => <a href={withBase(`/docs/${slug(item)}`)} aria-current={slug(item) === current ? "page" : undefined}>{item.data.title}</a>)}</nav>
+      <article class="prose"><Content /></article>
+      {headings.length > 0 && <nav class="docs-toc" aria-label="On this page"><b>ON THIS PAGE</b>{headings.filter((heading) => heading.depth === 2).map((heading) => <a href={`#${heading.slug}`}>{heading.text}</a>)}</nav>}
+    </div>
+  </main>
+</SiteLayout>

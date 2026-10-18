@@ -1,6 +1,6 @@
 # Policy reference
 
-Sireno starts from deny-all. Folder rules use `ro:pattern` or `rw:pattern`.
+SirenoRELAY starts from deny-all. Folder rules use `ro:pattern` or `rw:pattern`.
 
 | Target | `ro` | `rw` | `wo` |
 | --- | --- | --- | --- |
@@ -13,4 +13,4 @@ A message is readable only if its folder is readable and every stored `From` sen
 
 For sends, every SMTP envelope recipient and every declared To/Cc/Bcc address must independently be allowed by `outbound.addresses`. `outbound.signature`, when set, is appended to the sanitized outbound body.
 
-Content checks run separately for inbound and outbound mail. Subject and body patterns deny matching mail. `remove_links` produces a sanitized message. Attachments are default-deny in both directions; `inbound.attachments` and `outbound.attachments` explicitly allow MIME types using exact, glob, or `re:` patterns, with deny winning. `attachments.mode` defaults to `remove`; use `reject` to hide/reject the entire email, or `silent-remove` to remove the attachment without the standard removal notice. Sireno verifies declared MIME against detected bytes and fails closed for malformed or uninspectable MIME.
+Content checks run separately for inbound and outbound mail. Subject and body patterns deny matching mail. `remove_links` produces a sanitized message. Attachments are default-deny in both directions; `inbound.attachments` and `outbound.attachments` explicitly allow MIME types using exact, glob, or `re:` patterns, with deny winning. `attachments.mode` defaults to `remove`; use `reject` to hide/reject the entire email, or `silent-remove` to remove the attachment without the standard removal notice. SirenoRELAY verifies declared MIME against detected bytes and fails closed for malformed or uninspectable MIME.

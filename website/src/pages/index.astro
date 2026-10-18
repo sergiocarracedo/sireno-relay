@@ -1,33 +1,81 @@
 ---
-const title = "Sireno — constrained email for agents";
+import BrandLink from "../components/BrandLink.astro";
+import MailBoundaryDiagram from "../components/MailBoundaryDiagram.astro";
+import SiteLayout from "../layouts/SiteLayout.astro";
+import { withBase } from "../lib/with-base";
+import { version } from "../lib/version";
+
+const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills add sergiocarracedo/sireno-relay --skill sirenorelay`. Then read and use that skill to help me install and configure SirenoRELAY on an owner-controlled account. Verify the Homebrew formula is published before using it. Keep upstream mail credentials and the relay configuration out of the agent environment; guide me through onboarding and policy validation without asking me to paste secrets into chat.";
 ---
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>{title}</title>
-    <meta name="description" content="Token-authenticated MCP access to policy-filtered email." />
-    <style>
-      :root { color: #16231f; background: #f5f1e8; font-family: ui-monospace, monospace; }
-      body { max-width: 72rem; margin: auto; padding: 1.5rem; line-height: 1.5; }
-      header, footer { display:flex; justify-content:space-between; border-bottom:1px solid #b5b5a9; padding-block:1rem; }
-      main { padding-block: 12vh; } h1 { max-width:12ch; font:700 clamp(3rem,10vw,8rem)/.9 Georgia,serif; letter-spacing:-.07em; }
-      em { color:#52736b; } a { color:inherit; } a:focus-visible { outline:3px solid #16231f; outline-offset:4px; }
-      .cta { display:inline-block; background:#16231f; color:#d7ff39; padding:1rem 1.3rem; text-decoration:none; }
-      section { max-width:48rem; margin-block:5rem; } pre { background:#16231f; color:#d7ff39; padding:1rem; overflow:auto; }
-    </style>
-  </head>
-  <body>
-    <header><b>SIRENO</b><a href="https://github.com/sergiocarracedo/sireno-relay">GitHub</a></header>
-    <main>
-      <p>MCP EMAIL RELAY</p><h1>Give agents access. <em>Not your inbox.</em></h1>
-      <p>Policy-filtered, bearer-token-authenticated email access without upstream credentials.</p>
-      <a class="cta" href="https://github.com/sergiocarracedo/sireno-relay/tree/feat/release-completion-site/docs/public">Read the docs</a>
-      <section><h2>Policy before payload.</h2><p>Every search, read, attachment, and send is checked against the current owner policy. Unproven mutations stay unavailable.</p></section>
-      <section><h2>Owner workflow</h2><pre>sireno-relay onboard
-sireno-relay serve</pre><p>Onboard verifies an IMAP/SMTP account, lets you select readable folders, and shows the agent bearer token once.</p></section>
-    </main>
-    <footer><span>Sireno AI Relay</span><span>Least privilege for email agents.</span></footer>
-  </body>
-</html>
+
+<SiteLayout title="SirenoRELAY — constrained email for agents" description="Give agents narrowly scoped, policy-filtered email access without upstream credentials.">
+  <header class="site-header shell">
+    <BrandLink />
+    <nav aria-label="Main navigation"><a href={withBase("/docs")}>Docs</a><a href="https://github.com/sergiocarracedo/sireno-relay">GitHub ↗</a></nav>
+  </header>
+  <main>
+    <section class="hero shell">
+      <div class="hero-copy">
+        <p class="eyebrow">MCP EMAIL BOUNDARY <span>v{version}</span></p>
+        <h1>Give agents access.<br /><em>Not your inbox.</em></h1>
+        <p class="lede">SirenoRELAY gives an agent a narrow, policy-filtered mailbox view — without upstream credentials or a path around your rules.</p>
+        <div class="hero-actions"><a class="button button--solid" href={withBase("/docs/onboarding")}>Set up an agent <span>→</span></a><a class="button button--text" href="#boundary">See the boundary <span>↓</span></a></div>
+      </div>
+      <aside class="install-card" data-reveal>
+        <div class="terminal-bar"><span></span><span></span><span></span><b>install</b></div>
+        <p><b>Homebrew · after the first release.</b> Installs Himalaya too.</p>
+        <code><small>$</small> brew install sergiocarracedo/tap/sirenorelay</code>
+        <code class="subtle"><small>$</small> sirenorelay --version</code>
+        <div class="install-agent">
+          <p>Prefer an agent-guided setup? Give your agent the skill first.</p>
+          <button type="button" data-copy-prompt>Copy agent setup prompt <span aria-hidden="true">↗</span></button>
+          <span class="copy-status" role="status" aria-live="polite" data-copy-status></span>
+          <details><summary>Preview prompt</summary><pre data-setup-prompt>{setupPrompt}</pre></details>
+        </div>
+      </aside>
+    </section>
+
+    <div id="boundary" class="shell"><MailBoundaryDiagram /></div>
+
+    <section class="feature-band shell" aria-labelledby="features-title">
+      <div class="feature-intro" data-reveal><p class="eyebrow">THE CONTROL PLANE</p><h2 id="features-title">A mailbox view shaped by policy, not trust.</h2></div>
+      <div class="feature-grid">
+        <article data-reveal><span>01</span><h3>Folders disappear</h3><p>Unapproved folders never become part of the agent’s mailbox view or virtual IDs.</p></article>
+        <article data-reveal><span>02</span><h3>Senders are checked</h3><p>An allowed recipient cannot make an unapproved <code>From</code> sender visible.</p></article>
+        <article data-reveal><span>03</span><h3>Recipients are enforced</h3><p>Every recipient is checked before SirenoRELAY hands a message to the upstream provider.</p></article>
+        <article data-reveal><span>04</span><h3>Access is rechecked</h3><p>Bearer-token bindings and current policy are checked again for every operation.</p></article>
+      </div>
+    </section>
+
+    <section class="security-band shell" aria-labelledby="security-title" data-reveal>
+      <div class="security-copy"><p class="eyebrow">THE CREDENTIAL STAYS WITH THE OWNER</p><h2 id="security-title">An MCP tool call.<br /><em>Not a mailbox login.</em></h2><p>The agent sends a bearer token to SirenoRELAY’s MCP endpoint. SirenoRELAY—not the agent—loads the IMAP/SMTP credentials, talks to the mail server, applies policy, and returns only the allowed result.</p></div>
+      <div class="security-stack" role="group" aria-label="Credential boundary flow">
+        <div><b>Agent</b><small>MCP tool call + scoped bearer token</small></div><i>→</i>
+        <div class="security-gateway"><b>SirenoRELAY</b><small>Owns credentials · checks policy · filters results</small></div><i>→</i>
+        <div><b>Mail server</b><small>Upstream credentials stay on this side</small></div>
+      </div>
+      <p class="security-deploy">Run it under a dedicated OS service user or in an isolated container the agent cannot inspect. Do not give the agent access to the config, secret files, process environment, or a direct upstream route. <a href={withBase("/docs/security")}>Read the security model →</a></p>
+    </section>
+
+    <section class="docs-cta shell" data-reveal>
+      <div><p class="eyebrow">OWNER-OPERATED</p><h2>Configure the boundary.<br />Then hand over one token.</h2></div>
+      <div><p>Start with interactive onboarding, inspect the policy model, and keep upstream credentials outside the agent’s reach.</p><a class="button button--solid" href={withBase("/docs")}>Read the docs <span>→</span></a></div>
+    </section>
+  </main>
+  <footer class="site-footer shell"><span>SirenoRELAY</span><span>Default deny, by design.</span><span>v{version}</span></footer>
+  <script>
+    const copyButton = document.querySelector<HTMLButtonElement>("[data-copy-prompt]");
+    copyButton?.addEventListener("click", async () => {
+      const prompt = document.querySelector<HTMLElement>("[data-setup-prompt]");
+      const status = document.querySelector<HTMLElement>("[data-copy-status]");
+      if (!prompt || !status) return;
+      try {
+        await navigator.clipboard.writeText(prompt.textContent?.trim() ?? "");
+        status.textContent = "Prompt copied.";
+      } catch {
+        prompt.closest("details")?.setAttribute("open", "");
+        status.textContent = "Copy unavailable. Select the prompt below to copy it.";
+      }
+    });
+  </script>
+</SiteLayout>

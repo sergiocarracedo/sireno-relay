@@ -1,0 +1,14 @@
+---
+import { getCollection } from "astro:content";
+import BrandLink from "../../components/BrandLink.astro";
+import SiteLayout from "../../layouts/SiteLayout.astro";
+import { docs, slug } from "../../lib/docs";
+import { withBase } from "../../lib/with-base";
+const entries = docs(await getCollection("docs"));
+---
+
+<SiteLayout title="Docs — SirenoRELAY" description="Setup, policy, configuration and security documentation for SirenoRELAY.">
+  <header class="site-header shell"><BrandLink /><nav><a href="https://github.com/sergiocarracedo/sireno-relay">GitHub ↗</a></nav></header>
+  <div class="docs-context shell"><a href={withBase("/docs")}>DOCUMENTATION</a><span aria-hidden="true">›</span><strong>All guides</strong></div>
+  <main class="shell docs-page"><header class="docs-header"><p class="eyebrow">DOCUMENTATION</p><h1>The boundary, documented.</h1><p>Start with onboarding, then make the policy and security model explicit before you connect an agent.</p></header><div class="docs-list">{entries.map((entry) => <a href={withBase(`/docs/${slug(entry)}`)}><h2>{entry.data.title}</h2><p>{entry.data.description || "Read the reference."}</p><span>Read →</span></a>)}</div></main>
+</SiteLayout>

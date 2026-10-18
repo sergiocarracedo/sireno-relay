@@ -1,6 +1,6 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
-BIN := sireno-relay
+BIN := sirenorelay
 PREFIX ?= $(HOME)/.local
 
 .PHONY: build fmt-check test vet check hooks install

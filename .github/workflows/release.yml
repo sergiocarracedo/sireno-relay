@@ -1,0 +1,49 @@
+name: Publish CLI
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check release version
+        run: test "v$(cat VERSION)" = "$GITHUB_REF_NAME"
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: Check Go and build CLI
+        run: make check build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Build website
+        working-directory: website
+        run: npm ci && npm run build
+      - name: Check tap token
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: test -n "$TAP_GITHUB_TOKEN"
+      - name: Publish archives and Homebrew formula
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: v2.15.4
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

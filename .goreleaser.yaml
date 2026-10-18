@@ -1,0 +1,45 @@
+version: 2
+
+project_name: sirenorelay
+
+builds:
+  - id: sirenorelay
+    dir: cli
+    main: .
+    binary: sirenorelay
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Tag}}
+
+archives:
+  - id: sirenorelay
+    ids: [sirenorelay]
+    formats: [tar.gz]
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  use_existing_draft: true
+  mode: keep-existing
+
+brews:
+  - name: sirenorelay
+    ids: [sirenorelay]
+    repository:
+      owner: sergiocarracedo
+      name: homebrew-tap
+      token: '{{ .Env.TAP_GITHUB_TOKEN }}'
+    directory: Formula
+    homepage: https://github.com/sergiocarracedo/sireno-relay
+    description: Policy-filtered MCP email relay for agents
+    dependencies:
+      - name: himalaya
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/sirenorelay --version")
