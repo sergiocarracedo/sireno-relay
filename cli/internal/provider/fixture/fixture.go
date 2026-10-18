@@ -1,4 +1,5 @@
-// Package fixture provides a stateful provider for relay safety tests.
+// Package fixture provides a deterministic mailbox provider for testing relay
+// authorization without connecting to a real email account.
 package fixture
 
 import (
@@ -23,8 +24,8 @@ type Provider struct {
 	FlagUpdates           []FlagUpdate
 }
 
-// PageCall and SentMessage make authorization assertions observable without
-// exposing any production provider implementation details to tests.
+// PageCall and SentMessage record the upstream actions a test expects Sireno
+// to allow—or expects it to block.
 type PageCall struct {
 	Address string
 	Request provider.PageRequest

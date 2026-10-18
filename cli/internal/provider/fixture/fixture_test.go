@@ -9,6 +9,7 @@ import (
 )
 
 func TestProviderRecordsBoundedPagesAndSends(t *testing.T) {
+	// The fixture must record relay-visible upstream work for safety assertions.
 	p := New()
 	p.FoldersValue = []string{"INBOX", "Private"}
 	p.Pages["INBOX"] = [][]provider.Message{{{ID: "1", Generation: "g", Raw: []byte("From: a@example.org\r\nSubject: One\r\n\r\nBody")}}, {{ID: "2", Generation: "g", Raw: []byte("From: a@example.org\r\nSubject: Two\r\n\r\nBody")}}}
@@ -25,6 +26,7 @@ func TestProviderRecordsBoundedPagesAndSends(t *testing.T) {
 }
 
 func TestProviderSeparatesAccountFixturesAndReturnsCopies(t *testing.T) {
+	// One fixture can model separate accounts without test data leaking between them.
 	p := New()
 	p.FoldersByAddress["one@example.org"] = []string{"INBOX"}
 	p.PagesByAddress["one@example.org"] = map[string][][]provider.Message{

@@ -24,6 +24,7 @@ const (
 )
 
 func TestFixturePaginationHidesDeniedCandidates(t *testing.T) {
+	// A denied message must not consume a page slot or reveal its metadata.
 	path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 	p := fixture.New()
 	p.PagesByAddress["home@example.org"] = map[string][][]provider.Message{
@@ -49,6 +50,7 @@ func TestFixturePaginationHidesDeniedCandidates(t *testing.T) {
 
 func TestFixtureConstraintSuite(t *testing.T) {
 	t.Run("unauthenticated attachment requests never reach the provider", func(t *testing.T) {
+		// Reject unauthenticated requests before any mailbox access.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		p := seededFixture()
 		r := fixtureRelay(t, path, p)
@@ -64,6 +66,7 @@ func TestFixtureConstraintSuite(t *testing.T) {
 	})
 
 	t.Run("users sharing a provider remain policy-isolated", func(t *testing.T) {
+		// Separate policies over one mailbox must expose separate virtual views.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		p := seededFixture()
 		r := fixtureRelay(t, path, p)
@@ -100,6 +103,7 @@ func TestFixtureConstraintSuite(t *testing.T) {
 	})
 
 	t.Run("providers are isolated even when policy is shared", func(t *testing.T) {
+		// The same policy must never make a second provider's mailbox visible.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		p := seededFixture()
 		r := fixtureRelay(t, path, p)
@@ -119,6 +123,7 @@ func TestFixtureConstraintSuite(t *testing.T) {
 	})
 
 	t.Run("token rotation invalidates a cursor before provider access", func(t *testing.T) {
+		// A cursor obtained with an old token cannot resume after token rotation.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		p := seededFixture()
 		p.PagesByAddress["home@example.org"]["INBOX"] = [][]provider.Message{visibleMessages("home-2", 21)}
@@ -142,6 +147,7 @@ func TestFixtureConstraintSuite(t *testing.T) {
 	})
 
 	t.Run("attachment access is revoked when policy tightens", func(t *testing.T) {
+		// A previously listed attachment becomes unavailable as soon as policy denies it.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		p := seededFixture()
 		p.PagesByAddress["home@example.org"]["INBOX"] = [][]provider.Message{{{
@@ -170,6 +176,7 @@ func TestFixtureConstraintSuite(t *testing.T) {
 	})
 
 	t.Run("stale virtual IDs cannot read replacement messages", func(t *testing.T) {
+		// An old virtual ID must not become an ID for a replacement upstream message.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		p := seededFixture()
 		r := fixtureRelay(t, path, p)
@@ -188,6 +195,7 @@ func TestFixtureConstraintSuite(t *testing.T) {
 	})
 
 	t.Run("send and unavailable capacities never bypass policy", func(t *testing.T) {
+		// Recipient rules and disabled send capacity must prevent all delivery.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		p := seededFixture()
 		r := fixtureRelay(t, path, p)
@@ -212,6 +220,7 @@ func TestFixtureConstraintSuite(t *testing.T) {
 	})
 
 	t.Run("unavailable reads and writes produce no page calls", func(t *testing.T) {
+		// Unsupported operations fail locally; they never probe the mailbox first.
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		p := seededFixture()
 		p.CapabilitiesByAddress["home@example.org"] = provider.Capabilities{provider.CapacityFolders: true}
@@ -234,6 +243,7 @@ func TestFixtureConstraintSuite(t *testing.T) {
 }
 
 func seededFixture() *fixture.Provider {
+	// Two providers and mixed folders give the suite realistic isolation boundaries.
 	p := fixture.New()
 	p.FoldersByAddress["home@example.org"] = []string{"INBOX", "Private", "Hidden"}
 	p.FoldersByAddress["work@example.org"] = []string{"INBOX", "Payroll"}
