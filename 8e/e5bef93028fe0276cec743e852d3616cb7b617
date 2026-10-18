@@ -1,0 +1,14 @@
+Makefile
+  h_f90ee31b03fc41 9-10,29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8ee5bef93028fe0276cec743e852d3616cb7b617",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
