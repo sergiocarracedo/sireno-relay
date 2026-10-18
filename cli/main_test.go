@@ -52,6 +52,18 @@ func TestRequiresHimalaya(t *testing.T) {
 	}
 }
 
+func TestMissingConfigurationGuidesOwnerToOnboard(t *testing.T) {
+	previous := findExecutable
+	findExecutable = func(string) (string, error) { return "/usr/bin/himalaya", nil }
+	t.Cleanup(func() { findExecutable = previous })
+	path := filepath.Join(t.TempDir(), "missing.yml")
+	var out bytes.Buffer
+	err := run([]string{"config-check", "--config", path}, &out)
+	if err == nil || !strings.Contains(err.Error(), "sireno-relay onboard") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func TestCommandTooling(t *testing.T) {
 	previous := findExecutable
 	findExecutable = func(string) (string, error) { return "/usr/bin/himalaya", nil }

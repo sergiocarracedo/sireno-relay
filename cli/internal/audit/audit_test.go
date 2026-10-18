@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestWrapCapturesMCPContentWithoutChangingRequest(t *testing.T) {
+func TestWrapRecordsOnlyMCPMetadataWithoutChangingRequest(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
 	h := WrapMCP(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -22,7 +22,7 @@ func TestWrapCapturesMCPContentWithoutChangingRequest(t *testing.T) {
 		if string(data) != `{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_messages"}}` {
 			t.Fatalf("request=%q", data)
 		}
-		_, _ = w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"body":"private message"}`))
 	}), logger, true, "hermes-agent")
 	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_messages"}}`))
 	response := httptest.NewRecorder()
@@ -31,7 +31,7 @@ func TestWrapCapturesMCPContentWithoutChangingRequest(t *testing.T) {
 	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
 		t.Fatal(err)
 	}
-	if entry["request_content"] != `{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_messages"}}` || entry["response_content"] != `{"ok":true}` || entry["tool"] != "list_messages" || entry["user"] != "hermes-agent" || strings.Contains(logs.String(), "Authorization") {
+	if entry["tool"] != "list_messages" || entry["user"] != "hermes-agent" || strings.Contains(logs.String(), "request_content") || strings.Contains(logs.String(), "response_content") || strings.Contains(logs.String(), "private message") || strings.Contains(logs.String(), "Authorization") {
 		t.Fatalf("log=%s", logs.String())
 	}
 }

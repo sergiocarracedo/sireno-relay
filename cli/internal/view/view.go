@@ -179,9 +179,7 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 		if err != nil {
 			continue
 		} // unavailable messages must never be observable
-		addresses := append(append(append([]string{}, parsed.From...), parsed.To...), parsed.Cc...)
-		addresses = append(addresses, parsed.Bcc...)
-		if !p.ReadMessage(folder, addresses) {
+		if !p.ReadMessage(folder, parsed.From) {
 			continue
 		}
 		digest := sha256.Sum256(item.Raw)

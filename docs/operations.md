@@ -3,7 +3,7 @@
 Start a foreground relay:
 
 ```sh
-sireno-relay serve --config /home/owner/.config/sireno/config.yml
+sireno-relay serve --config /home/owner/.config/sireno-relay/config.yml
 ```
 
 Use Ctrl+C for a graceful shutdown. Run the binary under the same owner account that owns configuration and state. A systemd user-unit template is available at `docs/examples/relay.service`; adjust binary and config paths before installing it.

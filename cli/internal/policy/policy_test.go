@@ -54,7 +54,7 @@ func TestDefaultDenyAndPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !p.ReadMessage("INBOX/Facturas", nil) || p.ReadMessage("INBOX/FactPrivate", nil) || p.ReadMessage("INBOX/Other", nil) {
+	if !p.ReadMessage("INBOX/Facturas", []string{"sender@example.org"}) || p.ReadMessage("INBOX/FactPrivate", []string{"sender@example.org"}) || p.ReadMessage("INBOX/Other", []string{"sender@example.org"}) || p.ReadMessage("INBOX/Facturas", nil) {
 		t.Fatal("unexpected read access")
 	}
 	if p.WriteFolder("INBOX/Facturas") || p.Send([]string{"x@example.org"}) {

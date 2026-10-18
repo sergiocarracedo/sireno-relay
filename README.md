@@ -6,7 +6,7 @@ Sireno gives an agent a restricted, token-authenticated MCP mail view. It is a d
 
 ## Prerequisite: Himalaya
 
-Install the [Himalaya CLI](https://github.com/pimalaya/himalaya#installation) and run `himalaya` once before any Sireno command. Sireno verifies `himalaya` is available in `PATH` at startup and prints an install link if it is absent. Sireno uses its own YAML configuration, documented in `docs/configuration.md`; it does not read Himalaya's TOML accounts.
+Install the [Himalaya CLI](https://github.com/pimalaya/himalaya#installation). Sireno verifies it is available in `PATH`. Sireno uses its own YAML configuration; it does not read Himalaya's TOML accounts.
 
 ## Security model
 
@@ -17,13 +17,11 @@ The relay fails closed: unsupported MIME, malformed mail, oversized mail, failed
 ## Quick start
 
 ```sh
-cp config.example.yml config.yml
-chmod 600 config.yml
-# Replace all example addresses and pass commands.
-
-sireno-relay config-check --config config.yml
-sireno-relay serve --config config.yml
+sireno-relay onboard
+sireno-relay serve
 ```
+
+`onboard` supports IMAP/SMTP accounts and verifies them by listing live folders. Use ↑/↓ to move, Space to select folders, and Enter to continue. A failed connection lets you correct the provider settings. It writes an owner-only configuration at `~/.config/sireno-relay/config.yml`, owner-only upstream secret files, and an onboarding marker at `~/.config/sireno-relay/onboard`. For another Himalaya backend or a non-interactive setup, use `config.example.yml` and the manual configuration reference.
 
 Give the agent only the MCP endpoint and the bearer token whose SHA-256 hash is
 stored in its `users` entry. The agent calls the discovered MCP tools with
@@ -38,15 +36,16 @@ is proven target-scoped.
 
 ## Policy
 
-Policy is explicit and default-deny. Rules use `mode:pattern`:
+Policy is explicit and default-deny. Folder rules use `mode:pattern`:
 
-- `ro` grants read; `rw` grants read and folder management; `wo` grants send-only address access.
+- `ro` grants read; `rw` grants read and reserved folder-management access; `wo` is invalid for folders.
 - Exact names, `*` wildcards, and `re:<regular expression>` are supported.
 - A matching deny wins over every allow.
-- Folder read is always required. Address read is additionally required only when the profile configures address allow rules.
+- `inbound.addresses` contains unprefixed sender patterns. A visible message must have an allowed `From` sender; its recipients never authorize it.
+- `outbound.addresses` contains unprefixed recipient patterns. Every envelope and declared recipient must be allowed.
 - A send checks the supplied envelope **and** message `To`, `Cc`, and `Bcc`; one denied recipient rejects the whole message before upstream submission.
 
-`ro:*` and `rw:*` trigger an owner warning. Folder `wo` rules are invalid. Bcc is evaluated on received messages only if it exists in stored headers.
+`ro:*` and `rw:*` trigger an owner warning. `*` under inbound or outbound addresses grants every sender or recipient, respectively, and should be used only deliberately. `outbound.signature` optionally appends a signature to sanitized sent text.
 
 Inbound and outbound content rules are separate. Known recovery/secret patterns should be declared explicitly. An optional executable scanner adds best-effort detection; it must emit JSON `{"status":"clean"}` or `{"status":"finding"}` on stdout and exit successfully. A scanner failure, malformed output, or timeout denies the operation. A Gitleaks wrapper must translate its ambiguous nonzero status into that contract; do not configure Gitleaks directly as the scanner command.
 
@@ -58,6 +57,7 @@ Link removal replaces links with `[link removed]` and does not retain their targ
 sireno-relay config-check --config config.yml
 sireno-relay policy-check --config config.yml --user hermes-agent --folder INBOX/Invoices
 sireno-relay serve --config config.yml
+sireno-relay user token rotate --user hermes-agent --config config.yml
 ```
 
 `policy-check` evaluates real upstream mail but prints only a visible count—not subjects or bodies. Configuration/state files are owner-only; do not run these owner commands in an agent environment.

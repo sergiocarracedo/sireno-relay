@@ -20,6 +20,7 @@ import (
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	proxymcp "github.com/sergiocarracedo/sireno-ai-relay/internal/mcp"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/onboard"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/policy"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
@@ -27,10 +28,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 )
 
 var (
 	findExecutable = exec.LookPath
+	isTerminal     = term.IsTerminal
 	version        = "dev"
 )
 
@@ -76,11 +79,11 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
 	root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
 		if _, err := findExecutable("himalaya"); err != nil {
-			return errors.New("Himalaya CLI is required but was not found in PATH; install it from https://github.com/pimalaya/himalaya#installation, then run `himalaya` to complete its initial setup")
+			return errors.New("Himalaya CLI is required but was not found in PATH; install it from https://github.com/pimalaya/himalaya#installation")
 		}
 		return nil
 	}
-	root.AddCommand(newVersionCmd(), newCompletionCmd(root), newConfigCheckCmd(newViper()), newPolicyCheckCmd(newViper()), newServeCmd(newViper()))
+	root.AddCommand(newVersionCmd(), newCompletionCmd(root), newConfigCheckCmd(newViper()), newPolicyCheckCmd(newViper()), newServeCmd(newViper()), newOnboardCmd(), newUserCmd())
 	return root
 }
 
@@ -98,7 +101,18 @@ func bindString(v *viper.Viper, flags *pflag.FlagSet, name, value, usage string)
 }
 
 func configFlag(v *viper.Viper, cmd *cobra.Command) {
-	bindString(v, cmd.Flags(), "config", "config.yml", "owner-only YAML config")
+	bindString(v, cmd.Flags(), "config", defaultConfigPath(), "owner-only YAML config")
+}
+
+func defaultConfigPath() string {
+	if _, err := os.Stat("config.yml"); err == nil {
+		return "config.yml"
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "config.yml"
+	}
+	return filepath.Join(dir, "sireno-relay", "config.yml")
 }
 
 func newConfigCheckCmd(v *viper.Viper) *cobra.Command {
@@ -132,7 +146,7 @@ func newPolicyCheckCmd(v *viper.Viper) *cobra.Command {
 func newServeCmd(v *viper.Viper) *cobra.Command {
 	cmd := &cobra.Command{Use: "serve", Short: "Serve the token-authenticated MCP relay", Args: usageArgs(cobra.NoArgs)}
 	configFlag(v, cmd)
-	cmd.Flags().Bool("debug", false, "write sanitized MCP requests and responses to stdout")
+	cmd.Flags().Bool("debug", false, "write sanitized MCP metadata to stdout")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		debug, err := cmd.Flags().GetBool("debug")
 		if err != nil {
@@ -145,6 +159,60 @@ func newServeCmd(v *viper.Viper) *cobra.Command {
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{Use: "version", Short: "Print build version", Args: usageArgs(cobra.NoArgs), Run: func(cmd *cobra.Command, _ []string) { fmt.Fprintln(cmd.OutOrStdout(), version) }}
+}
+
+func newOnboardCmd() *cobra.Command {
+	return &cobra.Command{Use: "onboard", Short: "Interactively create an owner-only IMAP/SMTP configuration", Args: usageArgs(cobra.NoArgs), RunE: func(cmd *cobra.Command, _ []string) error {
+		if !isTerminal(int(os.Stdin.Fd())) || !isTerminal(int(os.Stdout.Fd())) {
+			return errors.New("onboard requires an interactive terminal")
+		}
+		path := defaultConfigPath()
+		dir, err := os.UserConfigDir()
+		if err != nil {
+			return err
+		}
+		_, err = onboard.Run(cmd.Context(), onboard.Options{ConfigPath: path, MarkerPath: filepath.Join(dir, "sireno-relay", "onboard"), Input: os.Stdin, Output: cmd.OutOrStdout(), ReadSecret: terminalSecret, TextPrompt: onboard.PromptText})
+		return err
+	}}
+}
+
+func terminalSecret(label string) (string, error) {
+	fmt.Fprintf(os.Stderr, "%s: ", label)
+	value, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", errors.New("could not read secret")
+	}
+	if len(value) == 0 {
+		return "", errors.New("secret is required")
+	}
+	return string(value), nil
+}
+
+func newUserCmd() *cobra.Command {
+	userCmd := &cobra.Command{Use: "user", Short: "Manage agent bearer tokens"}
+	tokenCmd := &cobra.Command{Use: "token", Short: "Manage bearer tokens"}
+	v := newViper()
+	rotate := &cobra.Command{Use: "rotate", Short: "Rotate an agent bearer token", Args: usageArgs(cobra.NoArgs), RunE: func(cmd *cobra.Command, _ []string) error {
+		if !isTerminal(int(os.Stdout.Fd())) {
+			return errors.New("token rotation requires an interactive terminal")
+		}
+		user := v.GetString("user")
+		if user == "" {
+			return usageError{errors.New("rotate requires --user")}
+		}
+		token, err := config.RotateToken(v.GetString("config"), user)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "New bearer token for %s (shown once):\n%s\n", user, token)
+		return nil
+	}}
+	configFlag(v, rotate)
+	bindString(v, rotate.Flags(), "user", "", "agent user name")
+	tokenCmd.AddCommand(rotate)
+	userCmd.AddCommand(tokenCmd)
+	return userCmd
 }
 
 func newCompletionCmd(root *cobra.Command) *cobra.Command {
@@ -170,6 +238,9 @@ func newCompletionCmd(root *cobra.Command) *cobra.Command {
 func loadConfig(path string, out io.Writer) (*config.Config, []string, error) {
 	cfg, warnings, err := config.Load(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil, errors.New("no configuration found; run `sireno-relay onboard`")
+		}
 		return nil, nil, err
 	}
 	for name, profile := range cfg.Profiles {

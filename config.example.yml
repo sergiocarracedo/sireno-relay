@@ -55,8 +55,8 @@ users:
 listen:
   mcp: 127.0.0.1:8080
 
-# MCP audit logs are JSON lines. Content capture is disabled unless explicitly
-# enabled, and then requires an owner-only file target (never stdout).
+# MCP audit logs are JSON lines. They record operational metadata only, never
+# MCP request/response content, bearer tokens, credentials, or attachment bytes.
 logging:
   level: info
   target: /var/log/sireno-relay/audit.jsonl

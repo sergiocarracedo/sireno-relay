@@ -72,6 +72,13 @@ func (p *Password) UnmarshalYAML(node *yaml.Node) error {
 	}
 }
 
+func (p Password) MarshalYAML() (any, error) {
+	if len(p.Command) > 0 {
+		return p.Command, nil
+	}
+	return p.Value, nil
+}
+
 type Profile struct {
 	Folders  Rules       `yaml:"folders"`
 	Inbound  ContentRule `yaml:"inbound"`
@@ -156,9 +163,12 @@ type MCPLog struct {
 }
 
 func Load(path string) (*Config, []string, error) {
-	stat, err := os.Stat(path)
+	stat, err := os.Lstat(path)
 	if err != nil {
 		return nil, nil, err
+	}
+	if stat.Mode()&os.ModeSymlink != 0 {
+		return nil, nil, errors.New("config must not be a symbolic link")
 	}
 	if !stat.Mode().IsRegular() || stat.Mode().Perm()&0077 != 0 {
 		return nil, nil, errors.New("config must be a regular file accessible only to its owner (mode 0600)")

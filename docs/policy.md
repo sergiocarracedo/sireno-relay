@@ -9,7 +9,7 @@ Sireno starts from deny-all. Folder rules use `ro:pattern` or `rw:pattern`.
 
 `inbound.addresses` and `outbound.addresses` contain unprefixed address patterns. `re:` starts a Go regular expression; otherwise `*` is a case-insensitive wildcard. Deny rules override allows.
 
-A message is readable only if its folder is readable and every stored From/To/Cc/Bcc address is allowed by `inbound.addresses`. Any denied or unallowed address hides the message.
+A message is readable only if its folder is readable and every stored `From` sender is allowed by `inbound.addresses`. A recipient never authorizes an unallowed sender. Any denied or unallowed sender hides the message.
 
 For sends, every SMTP envelope recipient and every declared To/Cc/Bcc address must independently be allowed by `outbound.addresses`. `outbound.signature`, when set, is appended to the sanitized outbound body.
 

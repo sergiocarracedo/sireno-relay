@@ -23,10 +23,10 @@ const title = "Sireno — constrained email for agents";
     <main>
       <p>MCP EMAIL RELAY</p><h1>Give agents access. <em>Not your inbox.</em></h1>
       <p>Policy-filtered, bearer-token-authenticated email access without upstream credentials.</p>
-      <a class="cta" href="https://github.com/sergiocarracedo/sireno-relay/tree/main/docs/public">Read the docs</a>
+      <a class="cta" href="https://github.com/sergiocarracedo/sireno-relay/tree/feat/release-completion-site/docs/public">Read the docs</a>
       <section><h2>Policy before payload.</h2><p>Every search, read, attachment, and send is checked against the current owner policy. Unproven mutations stay unavailable.</p></section>
-      <section><h2>Owner workflow</h2><pre>sireno-relay config-check --config config.yml
-sireno-relay serve --config config.yml</pre></section>
+      <section><h2>Owner workflow</h2><pre>sireno-relay onboard
+sireno-relay serve</pre><p>Onboard verifies an IMAP/SMTP account, lets you select readable folders, and shows the agent bearer token once.</p></section>
     </main>
     <footer><span>Sireno AI Relay</span><span>Least privilege for email agents.</span></footer>
   </body>

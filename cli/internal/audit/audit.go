@@ -2,7 +2,6 @@
 package audit
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -20,7 +19,6 @@ import (
 
 const defaultRetentionDays = 7
 const defaultMaxFileBytes = 100 << 20
-const maxCapturedContent = 1 << 20
 
 // Open creates a JSON logger. Caller closes the returned closer at shutdown.
 func Open(cfg config.Logging) (*slog.Logger, io.Closer, error) {
@@ -174,8 +172,8 @@ func (w *rotatingWriter) Close() error {
 	return err
 }
 
-// Wrap records safe request metadata. Content capture is bounded and only
-// intended for an explicit owner-only forensic log target.
+// Wrap records safe request metadata. The capture argument is retained for
+// configuration compatibility but message content is never recorded.
 func Wrap(next http.Handler, logger *slog.Logger, capture bool) http.Handler {
 	return WrapMCP(next, logger, capture, "")
 }
@@ -184,27 +182,23 @@ func Wrap(next http.Handler, logger *slog.Logger, capture bool) http.Handler {
 func WrapMCP(next http.Handler, logger *slog.Logger, capture bool, user string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		var request *captureReadCloser
+		var request *metadataReadCloser
 		if req.URL.Path == "/mcp" {
-			request = &captureReadCloser{ReadCloser: req.Body}
+			request = &metadataReadCloser{ReadCloser: req.Body}
 			req.Body = request
 		}
-		recorder := &responseRecorder{ResponseWriter: w, capture: capture && req.URL.Path == "/mcp"}
+		recorder := &responseRecorder{ResponseWriter: w}
 		next.ServeHTTP(recorder, req)
 		if recorder.status == 0 {
 			recorder.status = http.StatusOK
 		}
 		var requestBody []byte
-		var requestTruncated bool
 		if request != nil {
-			requestBody, requestTruncated = request.body.Bytes(), request.truncated
+			requestBody = request.body
 		}
 		attrs := []slog.Attr{slog.String("event", "mcp.request"), slog.String("method", req.Method), slog.String("path", req.URL.Path), slog.Int("status", recorder.status), slog.Duration("duration", time.Since(start)), slog.String("rpc_method", rpcMethod(requestBody)), slog.String("tool", toolName(requestBody))}
 		if user != "" {
 			attrs = append(attrs, slog.String("user", user))
-		}
-		if capture && req.URL.Path == "/mcp" {
-			attrs = append(attrs, slog.String("request_content", string(requestBody)), slog.Bool("request_truncated", requestTruncated), slog.String("response_content", recorder.body.String()), slog.Bool("response_truncated", recorder.truncated))
 		}
 		logger.LogAttrs(req.Context(), slog.LevelInfo, "MCP request", attrs...)
 	})
@@ -231,32 +225,29 @@ func toolName(data []byte) string {
 	return value.Params.Name
 }
 
-type captureReadCloser struct {
+type metadataReadCloser struct {
 	io.ReadCloser
-	body      bytes.Buffer
-	truncated bool
+	body []byte
 }
 
-func (r *captureReadCloser) Read(data []byte) (int, error) {
+func (r *metadataReadCloser) Read(data []byte) (int, error) {
 	n, err := r.ReadCloser.Read(data)
-	if n > 0 && r.body.Len() < maxCapturedContent {
-		remaining := maxCapturedContent - r.body.Len()
-		if n > remaining {
-			_, _ = r.body.Write(data[:remaining])
-			r.truncated = true
-		} else {
-			_, _ = r.body.Write(data[:n])
+	// MCP request metadata is small and parsed only to derive the RPC method
+	// and tool name. Do not retain arbitrary arguments or message contents.
+	if n > 0 && len(r.body) < 4096 {
+		remaining := 4096 - len(r.body)
+		captured := n
+		if captured > remaining {
+			captured = remaining
 		}
+		r.body = append(r.body, data[:captured]...)
 	}
 	return n, err
 }
 
 type responseRecorder struct {
 	http.ResponseWriter
-	status    int
-	capture   bool
-	body      bytes.Buffer
-	truncated bool
+	status int
 }
 
 func (w *responseRecorder) WriteHeader(status int) {
@@ -268,15 +259,6 @@ func (w *responseRecorder) WriteHeader(status int) {
 func (w *responseRecorder) Write(data []byte) (int, error) {
 	if w.status == 0 {
 		w.status = http.StatusOK
-	}
-	if w.capture && w.body.Len() < maxCapturedContent {
-		remaining := maxCapturedContent - w.body.Len()
-		if len(data) > remaining {
-			_, _ = w.body.Write(data[:remaining])
-			w.truncated = true
-		} else {
-			_, _ = w.body.Write(data)
-		}
 	}
 	return w.ResponseWriter.Write(data)
 }

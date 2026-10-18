@@ -1,21 +1,28 @@
 # Configuration
 
-Sireno has its own strict YAML configuration; it does **not** read Himalaya's TOML account file. Himalaya is nevertheless a required local prerequisite: Sireno checks that `himalaya` is in `PATH` for every command, so the owner has an installed, initialized email CLI alongside the relay. Install it from [Himalaya's installation guide](https://github.com/pimalaya/himalaya#installation), then run `himalaya` once to use its setup wizard.
+Sireno has its own strict YAML configuration; it does **not** read Himalaya's TOML account file. Himalaya is nevertheless required locally. Install it from [Himalaya's installation guide](https://github.com/pimalaya/himalaya#installation).
 
 ## Create a configuration
 
-1. Copy the shipped example into an owner-controlled directory.
-2. Replace every example address and password command.
-3. Restrict file access before validation.
-4. Validate, then run the relay.
+For an interactive IMAP/SMTP setup, run:
 
 ```sh
-install -d -m 700 "$HOME/.config/sireno"
-cp config.example.yml "$HOME/.config/sireno/config.yml"
-chmod 600 "$HOME/.config/sireno/config.yml"
+sireno-relay onboard
+```
 
-sireno-relay config-check --config "$HOME/.config/sireno/config.yml"
-sireno-relay serve --config "$HOME/.config/sireno/config.yml"
+It uses the provider name `default`, connects to the account, lists folders for keyboard multiple selection (↑/↓ to move, Space to select, Enter to continue), creates a read-only default profile, asks separately for allowed inbound senders and outbound recipients, and displays a bearer token once. If listing folders fails, it lets you correct the provider settings and try again. It stores its completion marker at `~/.config/sireno-relay/onboard`, config at `~/.config/sireno-relay/config.yml`, and owner-only upstream secret files below that directory. It will not overwrite an existing configuration. The wizard supports only IMAP/SMTP; use manual YAML for another Himalaya backend.
+
+Without `--config`, Sireno uses `./config.yml` when it exists, otherwise `~/.config/sireno-relay/config.yml`. An explicit `--config` always wins.
+
+For a manual setup:
+
+```sh
+   install -d -m 700 "$HOME/.config/sireno-relay"
+   cp config.example.yml "$HOME/.config/sireno-relay/config.yml"
+   chmod 600 "$HOME/.config/sireno-relay/config.yml"
+
+   sireno-relay config-check --config "$HOME/.config/sireno-relay/config.yml"
+   sireno-relay serve --config "$HOME/.config/sireno-relay/config.yml"
 ```
 
 Sireno rejects configurations that are not regular files, are readable by group/others, are not owned by the process user, contain duplicate/unknown keys, reference unset variables, or contain invalid policies. It creates `sireno-state.json` beside the configuration; keep that directory owner-only too.
@@ -25,16 +32,16 @@ Sireno rejects configurations that are not regular files, are readable by group/
 Edit the same YAML file, preserve mode `0600`, and validate it before restarting or relying on the new rules:
 
 ```sh
-${EDITOR:-vi} "$HOME/.config/sireno/config.yml"
-chmod 600 "$HOME/.config/sireno/config.yml"
-sireno-relay config-check --config "$HOME/.config/sireno/config.yml"
-sireno-relay policy-check --config "$HOME/.config/sireno/config.yml" --user hermes-agent --folder INBOX/Invoices
+${EDITOR:-vi} "$HOME/.config/sireno-relay/config.yml"
+chmod 600 "$HOME/.config/sireno-relay/config.yml"
+sireno-relay config-check --config "$HOME/.config/sireno-relay/config.yml"
+sireno-relay policy-check --config "$HOME/.config/sireno-relay/config.yml" --user hermes-agent --folder INBOX/Invoices
 ```
 
 The next operation reloads the file and uses the new policy immediately. If the replacement is invalid or unreadable, the operation fails closed until a valid owner-only configuration is restored. Keep a backup before changing a restrictive policy:
 
 ```sh
-cp "$HOME/.config/sireno/config.yml" "$HOME/.config/sireno/config.yml.bak"
+cp "$HOME/.config/sireno-relay/config.yml" "$HOME/.config/sireno-relay/config.yml.bak"
 ```
 
 ## Top-level fields
@@ -64,7 +71,7 @@ logging:
     capture_content: true
 ```
 
-`mcp.capture_content` defaults to `false`. When enabled, Sireno records bounded MCP request and response JSON to the file target for owner-only debugging. It is rejected for `stdout`; bearer tokens, authorization headers, and attachment-download bytes are never logged. The target file is created with mode `0600`; Sireno refuses an existing target that is not an owner-only regular file. Rotated files are removed after the retention period.
+`mcp.capture_content` is retained for configuration compatibility but never records request or response content. Audit output contains only bounded operational metadata such as the MCP method, tool, status, and duration; it never records bearer tokens, credentials, mail bodies, or attachment bytes. The target file is created with mode `0600`; Sireno refuses an existing target that is not an owner-only regular file. Rotated files are removed after the retention period.
 
 ## `providers.<name>`
 
@@ -85,23 +92,23 @@ Use an environment variable for a direct value, for example `password: "{env:SIR
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `folders.allow` / `folders.deny` | No | Folder access rules. Omitted means no folder is visible. |
-| `addresses.allow` / `addresses.deny` | No | Incoming address visibility and outbound recipient rules. |
-| `inbound` | No | Rules applied before mail is shown to an agent. |
-| `outbound` | No | Rules applied before mail is submitted upstream. |
+| `inbound.addresses.allow` / `.deny` | No | Allowed and denied incoming `From` senders. |
+| `outbound.addresses.allow` / `.deny` | No | Allowed and denied outbound recipients. |
+| `outbound.signature` | No | Text appended to sanitized outbound mail. |
 
 ### Rule syntax
 
-Every allow/deny item has `mode:pattern` syntax:
+Folder allow/deny items have `mode:pattern` syntax:
 
-| Mode | Folder meaning | Address meaning |
-| --- | --- | --- |
-| `ro` | Read allowed mail | Allow reading incoming messages with this stored address. |
-| `rw` | Read access; mutable folder operations are reserved for the supported safe surface | Allow incoming reads and outbound sends. |
-| `wo` | Invalid | Allow outbound delivery only. |
+| Mode | Folder meaning |
+| --- | --- |
+| `ro` | Read allowed mail. |
+| `rw` | Read access; mutable folder operations are reserved for the supported safe surface. |
+| `wo` | Invalid. |
 
-Patterns are case-insensitive exact matches by default, accept `*` wildcards, or use `re:` plus a Go regular expression. Examples: `ro:INBOX/Invoices`, `ro:Sent/*`, `wo:accounting@example.org`, `ro:re:.*@trusted\\.example\\.org`.
+Patterns are case-insensitive exact matches by default, accept `*` wildcards, or use `re:` plus a Go regular expression. Folder examples: `ro:INBOX/Invoices`, `ro:Sent/*`. Address patterns under `inbound.addresses` and `outbound.addresses` have no mode prefix.
 
-Rules are default-deny. A matching deny always overrides allow. Folder permission is always needed for a read. If at least one read-capable address allow (`ro`/`rw`) is configured, at least one stored From/To/Cc/Bcc address must also match it. A stored denied address hides the whole message. Sireno warns on broad `ro:*` and `rw:*` folder permissions.
+Rules are default-deny. A matching deny always overrides allow. Folder permission is always needed for a read. When inbound allow rules exist, every stored `From` sender must match; an unallowed or denied sender hides the message. Outbound rules apply to every envelope and declared `To`/`Cc`/`Bcc` recipient. `*` is an explicit broad grant. Sireno warns on broad `ro:*` and `rw:*` folder permissions.
 
 ## Content rules: `inbound` and `outbound`
 
@@ -113,6 +120,7 @@ Rules are default-deny. A matching deny always overrides allow. Folder permissio
 | `scanner` | No | Fixed executable argument array for best-effort secret detection. |
 | `attachments.allow` / `attachments.deny` | No | MIME types that may be accepted as attachments. Omitted `allow` means no attachment is allowed. |
 | `attachments.mode` | No, default `remove` | Action for an attachment disallowed by the MIME policy: `reject`, `remove`, or `silent-remove`. |
+| `signature` | Outbound only | Optional text appended after sanitized message text. |
 
 A scanner reads bounded mail text on stdin and must emit exactly JSON `{"status":"clean"}` or `{"status":"finding"}` to stdout, then exit successfully. A finding, timeout, crash, malformed JSON, oversized output, or any other failure denies the mail. Gitleaks needs a wrapper that converts its result into this contract; do not configure Gitleaks directly. Define known recovery or secret subjects/bodies explicitly—scanners are not a completeness guarantee.
 
@@ -133,7 +141,13 @@ Inbound message results include virtual attachment IDs and a relative `download_
 
 ## Agent tokens
 
-Create a high-entropy token outside the configuration, give it only to the agent, and write its SHA-256 hash under the user:
+`onboard` creates and reveals a high-entropy token once. To replace a token later without changing its provider or profile binding, use:
+
+```sh
+sireno-relay user token rotate --user hermes-agent --config config.yml
+```
+
+For manual setup, create a high-entropy token outside the configuration, give it only to the agent, and write its SHA-256 hash under the user:
 
 ```sh
 TOKEN="$(openssl rand -hex 32)"

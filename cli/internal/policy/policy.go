@@ -123,13 +123,16 @@ func permits(rules set, value, action string) bool {
 func (p *Policy) ReadFolder(folder string) bool  { return permits(p.folders, folder, "ro") }
 func (p *Policy) WriteFolder(folder string) bool { return permits(p.folders, folder, "wo") }
 
-// ReadMessage requires a permitted folder and optionally a matching address.
-// A deny rule for ANY visible address vetoes an otherwise allowed message.
-func (p *Policy) ReadMessage(folder string, addresses []string) bool {
+// ReadMessage requires a permitted folder and permitted message senders. A
+// recipient never authorizes an unapproved sender to become visible.
+func (p *Policy) ReadMessage(folder string, senders []string) bool {
 	if !p.ReadFolder(folder) {
 		return false
 	}
-	for _, address := range addresses {
+	if len(senders) == 0 {
+		return false
+	}
+	for _, address := range senders {
 		for _, r := range p.inbound.deny {
 			if (r.mode == "ro" || r.mode == "rw") && r.match(address) {
 				return false
@@ -146,7 +149,7 @@ func (p *Policy) ReadMessage(folder string, addresses []string) bool {
 	if !hasReadAllow {
 		return true
 	}
-	for _, address := range addresses {
+	for _, address := range senders {
 		allowed := false
 		for _, r := range p.inbound.allow {
 			if (r.mode == "ro" || r.mode == "rw") && r.match(address) {
@@ -158,7 +161,7 @@ func (p *Policy) ReadMessage(folder string, addresses []string) bool {
 			return false
 		}
 	}
-	return len(addresses) > 0
+	return true
 }
 
 func canonicalFolder(value string) string {

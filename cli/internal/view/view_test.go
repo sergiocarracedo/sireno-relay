@@ -141,3 +141,20 @@ func TestPermittedRecipientDoesNotAuthorizeUnpermittedSender(t *testing.T) {
 		t.Fatalf("snapshot=%#v err=%v", snapshot, err)
 	}
 }
+
+func TestAllowedSenderDoesNotRequireAllowedRecipient(t *testing.T) {
+	profile := config.Profile{Folders: config.Rules{Allow: []string{"ro:INBOX"}}, Inbound: config.ContentRule{Addresses: config.Rules{Allow: []string{"merchant@example.org"}}}}
+	p, err := policy.Compile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := Service{Provider: &fakeProvider{messages: []provider.Message{{ID: "1", Generation: "g", Raw: []byte("From: merchant@example.org\r\nTo: unrelated@example.org\r\nSubject: Invoice\r\n\r\nBody")}}}, Store: store}
+	snapshot, err := service.Snapshot(context.Background(), "bot", "home", "INBOX", config.Provider{}, profile, p)
+	if err != nil || len(snapshot.Messages) != 1 {
+		t.Fatalf("snapshot=%#v err=%v", snapshot, err)
+	}
+}
