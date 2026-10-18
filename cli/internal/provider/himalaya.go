@@ -85,7 +85,7 @@ func (h Himalaya) Folders(ctx context.Context, account config.Provider) ([]strin
 	}
 	var items []mailbox
 	if err := decodeJSONArray(output, "mailboxes", &items); err != nil {
-		return nil, errors.New("invalid himalaya mailbox response")
+		return nil, fmt.Errorf("invalid himalaya mailbox response: %w", err)
 	}
 	folders := make([]string, 0, len(items))
 	for _, item := range items {
@@ -136,7 +136,7 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 	}
 	var envelopes []envelope
 	if err := decodeJSONArray(output, "envelopes", &envelopes); err != nil {
-		return Page{}, errors.New("invalid himalaya envelope response")
+		return Page{}, fmt.Errorf("invalid himalaya envelope response: %w", err)
 	}
 	if len(envelopes) > int(request.PageSize) {
 		return Page{}, errors.New("invalid himalaya envelope response")
@@ -171,6 +171,9 @@ func decodeJSONArray[T any](output []byte, field string, result *[]T) error {
 	}
 	value, ok := wrapped[field]
 	if !ok {
+		if _, hasError := wrapped["error"]; hasError {
+			return errors.New("himalaya returned a JSON error")
+		}
 		return errors.New("missing result field")
 	}
 	return json.Unmarshal(value, result)

@@ -151,6 +151,15 @@ func TestDecodeJSONArrayAcceptsHimalayaV2AndLegacyResults(t *testing.T) {
 	}
 }
 
+func TestDecodeJSONArrayRedactsHimalayaJSONErrors(t *testing.T) {
+	type item struct{ Name string }
+	var items []item
+	err := decodeJSONArray([]byte(`{"error":"upstream password must not leak"}`), "mailboxes", &items)
+	if err == nil || !strings.Contains(err.Error(), "JSON error") || strings.Contains(err.Error(), "password") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func containsSequence(values []string, sequence ...string) bool {
 	for i := range values {
 		if i+len(sequence) > len(values) {
