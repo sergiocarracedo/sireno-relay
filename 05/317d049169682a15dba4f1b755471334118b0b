@@ -1,0 +1,20 @@
+cli/internal/mcp/server.go
+  h_f90ee31b03fc41 251
+cli/internal/provider/himalaya.go
+  h_f90ee31b03fc41 131,152
+cli/internal/provider/himalaya_test.go
+  h_f90ee31b03fc41 26-35,147-162
+cli/internal/view/view.go
+  h_f90ee31b03fc41 127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "05317d049169682a15dba4f1b755471334118b0b",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
