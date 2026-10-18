@@ -106,7 +106,7 @@ func TestVirtualIdentityResetsWhenUpstreamUIDValidityChanges(t *testing.T) {
 	if first.UIDValidity == second.UIDValidity {
 		t.Fatal("upstream UIDVALIDITY change retained virtual namespace")
 	}
-	if len(second.Messages) != 1 || second.Messages[0].UID != 1 || second.Messages[0].Mail.Subject != "Replacement" {
+	if len(second.Messages) != 1 || second.Messages[0].UID == first.Messages[0].UID || second.Messages[0].Mail.Subject != "Replacement" {
 		t.Fatalf("unexpected reset snapshot: %+v", second)
 	}
 }

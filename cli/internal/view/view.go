@@ -219,7 +219,14 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 	}
 	created := state == nil
 	if state == nil || (upstreamGeneration != "" && state.UpstreamGeneration != "" && state.UpstreamGeneration != upstreamGeneration) {
-		state, err = newIDState(upstreamGeneration)
+		// MCP message reads accept only a virtual UID (not UIDVALIDITY). Keep
+		// virtual UIDs monotonic across an upstream generation change so a stale
+		// UID cannot resolve to a replacement message in the new mailbox.
+		nextUID := uint32(1)
+		if state != nil && state.Next > nextUID {
+			nextUID = state.Next
+		}
+		state, err = newIDState(upstreamGeneration, nextUID)
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +264,7 @@ func (s *Service) Snapshot(ctx context.Context, user, providerName, folder strin
 	return result, nil
 }
 
-func newIDState(upstreamGeneration string) (*idState, error) {
+func newIDState(upstreamGeneration string, next uint32) (*idState, error) {
 	var value [4]byte
 	if _, err := rand.Read(value[:]); err != nil {
 		return nil, err
@@ -266,7 +273,10 @@ func newIDState(upstreamGeneration string) (*idState, error) {
 	if validity == 0 {
 		validity = 1
 	}
-	return &idState{UIDValidity: validity, UpstreamGeneration: upstreamGeneration, Next: 1, Visible: make(map[string]uint32)}, nil
+	if next == 0 {
+		next = 1
+	}
+	return &idState{UIDValidity: validity, UpstreamGeneration: upstreamGeneration, Next: next, Visible: make(map[string]uint32)}, nil
 }
 
 func sameState(a, b *idState) bool {

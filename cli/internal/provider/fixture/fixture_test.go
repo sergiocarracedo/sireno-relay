@@ -23,3 +23,34 @@ func TestProviderRecordsBoundedPagesAndSends(t *testing.T) {
 		t.Fatalf("calls=%d sends=%d", len(p.Calls), len(p.Sent))
 	}
 }
+
+func TestProviderSeparatesAccountFixturesAndReturnsCopies(t *testing.T) {
+	p := New()
+	p.FoldersByAddress["one@example.org"] = []string{"INBOX"}
+	p.PagesByAddress["one@example.org"] = map[string][][]provider.Message{
+		"INBOX": {{{ID: "one", Generation: "g", Raw: []byte("From: one@example.org\r\n\r\none")}}},
+	}
+	p.PagesByAddress["two@example.org"] = map[string][][]provider.Message{
+		"INBOX": {{{ID: "two", Generation: "g", Raw: []byte("From: two@example.org\r\n\r\ntwo")}}},
+	}
+	one := config.Provider{Address: "one@example.org"}
+	two := config.Provider{Address: "two@example.org"}
+	first, err := p.Page(context.Background(), one, provider.PageRequest{Folder: "INBOX", Page: 1, PageSize: 20})
+	if err != nil || first.Messages[0].ID != "one" {
+		t.Fatalf("first=%#v err=%v", first, err)
+	}
+	first.Messages[0].ID = "changed"
+	first.Messages[0].Raw[0] = 'X'
+	again, err := p.Page(context.Background(), one, provider.PageRequest{Folder: "INBOX", Page: 1, PageSize: 20})
+	if err != nil || again.Messages[0].ID != "one" || again.Messages[0].Raw[0] != 'F' {
+		t.Fatalf("again=%#v err=%v", again, err)
+	}
+	other, err := p.Page(context.Background(), two, provider.PageRequest{Folder: "INBOX", Page: 1, PageSize: 20})
+	if err != nil || other.Messages[0].ID != "two" {
+		t.Fatalf("other=%#v err=%v", other, err)
+	}
+	calls := p.PageCallSnapshot()
+	if len(calls) != 3 || calls[0].Address != one.Address || calls[2].Address != two.Address {
+		t.Fatalf("calls=%#v", calls)
+	}
+}
