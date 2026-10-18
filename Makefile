@@ -6,16 +6,16 @@ PREFIX ?= $(HOME)/.local
 .PHONY: build fmt-check test vet check hooks install
 
 build:
-	go build -ldflags '$(LDFLAGS)' -o bin/$(BIN) ./cmd/sireno
+	cd cli && go build -ldflags '$(LDFLAGS)' -o bin/$(BIN) .
 
 fmt-check:
-	@test -z "$$(gofmt -l $$(find . -name '*.go' -type f -not -path './vendor/*'))" || (echo "Run gofmt on the files above."; exit 1)
+	@test -z "$$(gofmt -l $$(find cli -name '*.go' -type f -not -path './vendor/*'))" || (echo "Run gofmt on the files above."; exit 1)
 
 test:
-	go test ./...
+	cd cli && go test ./...
 
 vet:
-	go vet ./...
+	cd cli && go vet ./...
 
 check: fmt-check vet test
 
@@ -25,4 +25,4 @@ hooks:
 install:
 	$(MAKE) build
 	install -d "$(DESTDIR)$(PREFIX)/bin"
-	install -m 0755 bin/$(BIN) "$(DESTDIR)$(PREFIX)/bin/$(BIN)"
+	install -m 0755 cli/bin/$(BIN) "$(DESTDIR)$(PREFIX)/bin/$(BIN)"
