@@ -1,0 +1,33 @@
+---
+const title = "Sireno — constrained email for agents";
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{title}</title>
+    <meta name="description" content="Token-authenticated MCP access to policy-filtered email." />
+    <style>
+      :root { color: #16231f; background: #f5f1e8; font-family: ui-monospace, monospace; }
+      body { max-width: 72rem; margin: auto; padding: 1.5rem; line-height: 1.5; }
+      header, footer { display:flex; justify-content:space-between; border-bottom:1px solid #b5b5a9; padding-block:1rem; }
+      main { padding-block: 12vh; } h1 { max-width:12ch; font:700 clamp(3rem,10vw,8rem)/.9 Georgia,serif; letter-spacing:-.07em; }
+      em { color:#52736b; } a { color:inherit; } a:focus-visible { outline:3px solid #16231f; outline-offset:4px; }
+      .cta { display:inline-block; background:#16231f; color:#d7ff39; padding:1rem 1.3rem; text-decoration:none; }
+      section { max-width:48rem; margin-block:5rem; } pre { background:#16231f; color:#d7ff39; padding:1rem; overflow:auto; }
+    </style>
+  </head>
+  <body>
+    <header><b>SIRENO</b><a href="https://github.com/sergiocarracedo/sireno-relay">GitHub</a></header>
+    <main>
+      <p>MCP EMAIL RELAY</p><h1>Give agents access. <em>Not your inbox.</em></h1>
+      <p>Policy-filtered, bearer-token-authenticated email access without upstream credentials.</p>
+      <a class="cta" href="https://github.com/sergiocarracedo/sireno-relay/tree/main/docs/public">Read the docs</a>
+      <section><h2>Policy before payload.</h2><p>Every search, read, attachment, and send is checked against the current owner policy. Unproven mutations stay unavailable.</p></section>
+      <section><h2>Owner workflow</h2><pre>sireno-relay config-check --config config.yml
+sireno-relay serve --config config.yml</pre></section>
+    </main>
+    <footer><span>Sireno AI Relay</span><span>Least privilege for email agents.</span></footer>
+  </body>
+</html>
