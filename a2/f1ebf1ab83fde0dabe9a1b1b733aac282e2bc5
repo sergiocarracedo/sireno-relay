@@ -1,0 +1,16 @@
+cli/internal/mcp/server.go
+  h_f90ee31b03fc41 169-177,205-213,297,307-315,452
+cli/internal/mcp/server_test.go
+  h_f90ee31b03fc41 44,204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2f1ebf1ab83fde0dabe9a1b1b733aac282e2bc5",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
