@@ -166,13 +166,15 @@ func bindingFingerprint(identity *relay.Identity) string {
 }
 
 type envelope struct {
-	UID         uint32              `json:"uid"`
-	Subject     string              `json:"subject"`
-	From        []string            `json:"from,omitempty"`
-	To          []string            `json:"to,omitempty"`
-	Cc          []string            `json:"cc,omitempty"`
-	Date        string              `json:"date,omitempty"`
-	Attachments []attachmentSummary `json:"attachments,omitempty"`
+	UID             uint32              `json:"uid"`
+	Subject         string              `json:"subject"`
+	From            []string            `json:"from,omitempty"`
+	To              []string            `json:"to,omitempty"`
+	Cc              []string            `json:"cc,omitempty"`
+	Date            string              `json:"date,omitempty"`
+	Read            bool                `json:"read"`
+	AttachmentCount int                 `json:"attachment_count"`
+	Attachments     []attachmentSummary `json:"attachments,omitempty"`
 }
 
 type attachmentSummary struct {
@@ -200,13 +202,15 @@ type readMessagesArgs struct {
 }
 
 type messageContent struct {
-	UID         uint32                 `json:"uid"`
-	Subject     string                 `json:"subject"`
-	From        []string               `json:"from,omitempty"`
-	To          []string               `json:"to,omitempty"`
-	Cc          []string               `json:"cc,omitempty"`
-	Body        string                 `json:"body"`
-	Attachments []attachmentDescriptor `json:"attachments,omitempty"`
+	UID             uint32                 `json:"uid"`
+	Subject         string                 `json:"subject"`
+	From            []string               `json:"from,omitempty"`
+	To              []string               `json:"to,omitempty"`
+	Cc              []string               `json:"cc,omitempty"`
+	Body            string                 `json:"body"`
+	Read            bool                   `json:"read"`
+	AttachmentCount int                    `json:"attachment_count"`
+	Attachments     []attachmentDescriptor `json:"attachments,omitempty"`
 }
 
 type sendMessageArgs struct {
@@ -290,7 +294,7 @@ func messagesWithCursors(r *relay.Relay, cursors *cursorStore) func(context.Cont
 }
 
 func envelopeFromMessage(message view.Message) envelope {
-	item := envelope{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc}
+	item := envelope{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc, Read: hasFlag(message.Flags, provider.FlagSeen), AttachmentCount: len(message.Mail.Attachments)}
 	if message.Mail.Date != nil {
 		item.Date = message.Mail.Date.Format(time.RFC3339)
 	}
@@ -298,6 +302,15 @@ func envelopeFromMessage(message view.Message) envelope {
 		item.Attachments = append(item.Attachments, attachmentSummary{Name: attachment.Name, MIMEType: attachment.MIMEType, Size: len(attachment.Bytes)})
 	}
 	return item
+}
+
+func hasFlag(flags []provider.Flag, want provider.Flag) bool {
+	for _, flag := range flags {
+		if flag == want {
+			return true
+		}
+	}
+	return false
 }
 
 func searchMessages(r *relay.Relay, cursors *cursorStore) func(context.Context, *gomcp.CallToolRequest, listMessagesArgs) (*gomcp.CallToolResult, any, error) {
@@ -436,7 +449,7 @@ func messageFlags(names []string) ([]provider.Flag, bool) {
 }
 
 func messageResult(folder string, message view.Message) messageContent {
-	result := messageContent{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc, Body: message.Mail.Body}
+	result := messageContent{UID: message.UID, Subject: message.Mail.Subject, From: message.Mail.From, To: message.Mail.To, Cc: message.Mail.Cc, Body: message.Mail.Body, Read: hasFlag(message.Flags, provider.FlagSeen), AttachmentCount: len(message.Mail.Attachments)}
 	for _, attachment := range message.Mail.Attachments {
 		result.Attachments = append(result.Attachments, attachmentDescriptor{ID: attachment.ID, Name: attachment.Name, MIMEType: attachment.MIMEType, Size: len(attachment.Bytes), DownloadURL: attachmentURL(folder, message.UID, attachment.ID)})
 	}

@@ -41,7 +41,7 @@ func (fakeProvider) StoreFlags(context.Context, config.Provider, string, provide
 type attachmentProvider struct{ fakeProvider }
 
 func (attachmentProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
-	return []provider.Message{{ID: "42", Generation: "1", Raw: []byte("From: store@example.org\r\nTo: me@example.org\r\nCc: accounts@example.org\r\nDate: Wed, 14 Oct 2026 09:30:00 +0000\r\nSubject: Receipt\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nTotal\r\n--x\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=receipt.pdf\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQK\r\n--x--\r\n")}}, nil
+	return []provider.Message{{ID: "42", Generation: "1", Flags: []provider.Flag{provider.FlagSeen}, Raw: []byte("From: store@example.org\r\nTo: me@example.org\r\nCc: accounts@example.org\r\nDate: Wed, 14 Oct 2026 09:30:00 +0000\r\nSubject: Receipt\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nTotal\r\n--x\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=receipt.pdf\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQK\r\n--x--\r\n")}}, nil
 }
 func (p attachmentProvider) Page(ctx context.Context, account config.Provider, request provider.PageRequest) (provider.Page, error) {
 	if request.Page != 1 {
@@ -201,7 +201,7 @@ users:
 		t.Fatal(err)
 	}
 	item := listed.(map[string]any)["messages"].([]envelope)[0]
-	if len(item.From) != 1 || len(item.To) != 1 || len(item.Cc) != 1 || item.Date != "2026-10-14T09:30:00Z" || len(item.Attachments) != 1 || item.Attachments[0].Name != "receipt.pdf" {
+	if len(item.From) != 1 || len(item.To) != 1 || len(item.Cc) != 1 || item.Date != "2026-10-14T09:30:00Z" || !item.Read || item.AttachmentCount != 1 || len(item.Attachments) != 1 || item.Attachments[0].Name != "receipt.pdf" {
 		t.Fatalf("list item=%#v", item)
 	}
 }
