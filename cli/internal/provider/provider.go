@@ -75,26 +75,18 @@ type Page struct {
 	HasMore  bool
 }
 
-// Client is intentionally small. All providers implement the same base read
-// and send operations, while a capacity advertises whether each is usable for
-// the current account. Optional operations have focused interfaces below.
+// Client is the complete, provider-neutral contract. Every adapter must
+// implement every method; Capabilities determines which operations are safe to
+// invoke for a particular account. This keeps provider compatibility a compile
+// time guarantee instead of allowing a provider to advertise an operation that
+// it cannot implement.
 type Client interface {
 	Capabilities(context.Context, config.Provider) (Capabilities, error)
 	Folders(context.Context, config.Provider) ([]string, error)
 	Messages(context.Context, config.Provider, string) ([]Message, error)
-	Send(context.Context, config.Provider, string, []string, []byte) error
-}
-
-// FlagStore performs one target-scoped flag operation. The relay supplies an
-// opaque target from a freshly filtered message and never an agent-supplied ID.
-type FlagStore interface {
-	StoreFlags(context.Context, config.Provider, string, Message, []Flag, FlagAction) error
-}
-
-// PageReader is an optional focused capability so providers that cannot search
-// do not need to simulate search. The relay checks the declared capacity first.
-type PageReader interface {
 	Page(context.Context, config.Provider, PageRequest) (Page, error)
+	Send(context.Context, config.Provider, string, []string, []byte) error
+	StoreFlags(context.Context, config.Provider, string, Message, []Flag, FlagAction) error
 }
 
 func Supports(ctx context.Context, client Client, account config.Provider, capacity Capacity) error {

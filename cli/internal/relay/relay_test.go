@@ -38,6 +38,12 @@ func (*fake) Folders(context.Context, config.Provider) ([]string, error) { retur
 func (f *fake) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
 	return f.messages, nil
 }
+func (f *fake) Page(_ context.Context, _ config.Provider, request provider.PageRequest) (provider.Page, error) {
+	if request.Page != 1 {
+		return provider.Page{}, nil
+	}
+	return provider.Page{Messages: f.messages}, nil
+}
 func (f *fake) Send(_ context.Context, _ config.Provider, _ string, _ []string, data []byte) error {
 	f.sent++
 	f.data = data

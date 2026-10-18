@@ -21,7 +21,16 @@ func (f *fakeProvider) Folders(context.Context, config.Provider) ([]string, erro
 func (f *fakeProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
 	return f.messages, nil
 }
+func (f *fakeProvider) Page(_ context.Context, _ config.Provider, request provider.PageRequest) (provider.Page, error) {
+	if request.Page != 1 {
+		return provider.Page{}, nil
+	}
+	return provider.Page{Messages: f.messages}, nil
+}
 func (f *fakeProvider) Send(context.Context, config.Provider, string, []string, []byte) error {
+	return nil
+}
+func (*fakeProvider) StoreFlags(context.Context, config.Provider, string, provider.Message, []provider.Flag, provider.FlagAction) error {
 	return nil
 }
 

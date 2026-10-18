@@ -53,6 +53,8 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 // here; relay, policy, views, and MCP tools use only provider-neutral types.
 type Himalaya struct{ Runner CommandRunner }
 
+var _ Client = Himalaya{}
+
 func (h Himalaya) runner() CommandRunner {
 	if h.Runner != nil {
 		return h.Runner

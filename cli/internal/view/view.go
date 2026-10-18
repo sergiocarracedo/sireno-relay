@@ -122,15 +122,7 @@ func (s *Service) Page(ctx context.Context, user, providerName, folder string, a
 	if err := provider.Supports(ctx, s.Provider, account, capacity); err != nil {
 		return nil, false, err
 	}
-	reader, ok := s.Provider.(provider.PageReader)
-	if !ok {
-		if page != 1 || query != "" {
-			return nil, false, provider.ErrCapacityUnavailable
-		}
-		result, err := s.Snapshot(ctx, user, providerName, folder, account, profile, p)
-		return result, false, err
-	}
-	upstream, err := reader.Page(ctx, account, provider.PageRequest{Folder: folder, Page: page, PageSize: 20, Query: query})
+	upstream, err := s.Provider.Page(ctx, account, provider.PageRequest{Folder: folder, Page: page, PageSize: 20, Query: query})
 	if err != nil {
 		return nil, false, errors.New("mailbox unavailable")
 	}

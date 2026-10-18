@@ -255,14 +255,10 @@ func (r *Relay) UpdateFlags(ctx context.Context, identity *Identity, folder stri
 	if err != nil || !samePolicy(current, latest) || !latest.Policy.WriteFolder(folder) {
 		return errors.New("policy changed; retry update")
 	}
-	store, ok := r.Provider.(provider.FlagStore)
-	if !ok {
-		return errors.New("message update unavailable")
-	}
 	if err := provider.Supports(ctx, r.Provider, latest.Account, provider.CapacityUpdateFlags); err != nil {
 		return err
 	}
-	if err := store.StoreFlags(ctx, latest.Account, folder, target.Upstream, flags, action); err != nil {
+	if err := r.Provider.StoreFlags(ctx, latest.Account, folder, target.Upstream, flags, action); err != nil {
 		return errors.New("message update unavailable")
 	}
 	return nil

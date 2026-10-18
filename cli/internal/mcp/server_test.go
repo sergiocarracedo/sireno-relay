@@ -28,7 +28,13 @@ func (fakeProvider) Folders(context.Context, config.Provider) ([]string, error) 
 func (fakeProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
 	return nil, nil
 }
+func (fakeProvider) Page(context.Context, config.Provider, provider.PageRequest) (provider.Page, error) {
+	return provider.Page{}, nil
+}
 func (fakeProvider) Send(context.Context, config.Provider, string, []string, []byte) error {
+	return nil
+}
+func (fakeProvider) StoreFlags(context.Context, config.Provider, string, provider.Message, []provider.Flag, provider.FlagAction) error {
 	return nil
 }
 
@@ -36,6 +42,13 @@ type attachmentProvider struct{ fakeProvider }
 
 func (attachmentProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
 	return []provider.Message{{ID: "42", Generation: "1", Raw: []byte("From: store@example.org\r\nTo: me@example.org\r\nCc: accounts@example.org\r\nDate: Wed, 14 Oct 2026 09:30:00 +0000\r\nSubject: Receipt\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nTotal\r\n--x\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=receipt.pdf\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQK\r\n--x--\r\n")}}, nil
+}
+func (p attachmentProvider) Page(ctx context.Context, account config.Provider, request provider.PageRequest) (provider.Page, error) {
+	if request.Page != 1 {
+		return provider.Page{}, nil
+	}
+	messages, err := p.Messages(ctx, account, request.Folder)
+	return provider.Page{Messages: messages}, err
 }
 
 type mutationProvider struct {

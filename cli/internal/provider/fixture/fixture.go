@@ -20,6 +20,7 @@ type Provider struct {
 	Calls                 []provider.PageRequest
 	PageCalls             []PageCall
 	Sent                  []SentMessage
+	FlagUpdates           []FlagUpdate
 }
 
 // PageCall and SentMessage make authorization assertions observable without
@@ -35,6 +36,16 @@ type SentMessage struct {
 	Recipients []string
 	Raw        []byte
 }
+
+type FlagUpdate struct {
+	Address string
+	Folder  string
+	Target  provider.Message
+	Flags   []provider.Flag
+	Action  provider.FlagAction
+}
+
+var _ provider.Client = (*Provider)(nil)
 
 func New() *Provider {
 	return &Provider{
@@ -85,6 +96,13 @@ func (p *Provider) Send(_ context.Context, account config.Provider, from string,
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.Sent = append(p.Sent, SentMessage{Address: account.Address, From: from, Recipients: append([]string(nil), recipients...), Raw: append([]byte(nil), raw...)})
+	return nil
+}
+
+func (p *Provider) StoreFlags(_ context.Context, account config.Provider, folder string, target provider.Message, flags []provider.Flag, action provider.FlagAction) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.FlagUpdates = append(p.FlagUpdates, FlagUpdate{Address: account.Address, Folder: folder, Target: target, Flags: append([]provider.Flag(nil), flags...), Action: action})
 	return nil
 }
 
