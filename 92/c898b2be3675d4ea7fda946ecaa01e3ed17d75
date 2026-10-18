@@ -1,0 +1,14 @@
+internal/mcp/safety_integration_test.go
+  h_f90ee31b03fc41 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "92c898b2be3675d4ea7fda946ecaa01e3ed17d75",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
