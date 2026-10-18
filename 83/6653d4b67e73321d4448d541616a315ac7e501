@@ -1,0 +1,34 @@
+cli/internal/config/config.go
+  h_f90ee31b03fc41 76-78,87-88,303-314
+cli/internal/mail/message.go
+  h_f90ee31b03fc41 57-67
+cli/internal/mcp/safety_integration_test.go
+  h_f90ee31b03fc41 298-299
+cli/internal/mcp/server_test.go
+  h_f90ee31b03fc41 346
+cli/internal/policy/policy.go
+  h_f90ee31b03fc41 19,26,28,30-51,133,140,151,177
+cli/internal/policy/policy_test.go
+  h_f90ee31b03fc41 11-13,66,69
+cli/internal/relay/relay.go
+  h_f90ee31b03fc41 222-226
+cli/internal/relay/relay_test.go
+  h_f90ee31b03fc41 71,95,98,207
+cli/internal/view/view_test.go
+  h_f90ee31b03fc41 125-126
+config.example.yml
+  h_f90ee31b03fc41 20-21,37-39
+docs/policy.md
+  h_f90ee31b03fc41 3,8,10,12,14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "836653d4b67e73321d4448d541616a315ac7e501",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
