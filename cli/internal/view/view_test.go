@@ -122,8 +122,8 @@ func TestVirtualIdentityResetsWhenUpstreamUIDValidityChanges(t *testing.T) {
 
 func TestPermittedRecipientDoesNotAuthorizeUnpermittedSender(t *testing.T) {
 	profile := config.Profile{
-		Folders:   config.Rules{Allow: []string{"ro:INBOX"}},
-		Addresses: config.Rules{Allow: []string{"ro:bot@example.org"}},
+		Folders: config.Rules{Allow: []string{"ro:INBOX"}},
+		Inbound: config.ContentRule{Addresses: config.Rules{Allow: []string{"bot@example.org"}}},
 	}
 	p, err := policy.Compile(profile)
 	if err != nil {

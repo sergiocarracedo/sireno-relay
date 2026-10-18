@@ -8,8 +8,9 @@ import (
 
 func TestReadAndSend(t *testing.T) {
 	p, err := Compile(config.Profile{
-		Folders:   config.Rules{Allow: []string{"rw:INBOX/*"}, Deny: []string{"rw:INBOX/Private"}},
-		Addresses: config.Rules{Allow: []string{"ro:alice@example.org", "ro:bob@example.org", "wo:trusted@example.org"}, Deny: []string{"ro:blocked@example.org", "wo:bad@example.org"}},
+		Folders:  config.Rules{Allow: []string{"rw:INBOX/*"}, Deny: []string{"rw:INBOX/Private"}},
+		Inbound:  config.ContentRule{Addresses: config.Rules{Allow: []string{"alice@example.org", "bob@example.org"}, Deny: []string{"blocked@example.org"}}},
+		Outbound: config.ContentRule{Addresses: config.Rules{Allow: []string{"trusted@example.org"}, Deny: []string{"bad@example.org"}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -62,10 +63,10 @@ func TestDefaultDenyAndPatterns(t *testing.T) {
 	if _, err := Compile(config.Profile{Folders: config.Rules{Allow: []string{"wo:INBOX"}}}); err == nil {
 		t.Fatal("accepted write-only folder")
 	}
-	if _, err := Compile(config.Profile{Addresses: config.Rules{Allow: []string{"ro:re:["}}}); err == nil {
+	if _, err := Compile(config.Profile{Inbound: config.ContentRule{Addresses: config.Rules{Allow: []string{"re:["}}}}); err == nil {
 		t.Fatal("accepted invalid regex")
 	}
-	onlySend, err := Compile(config.Profile{Folders: config.Rules{Allow: []string{"ro:INBOX"}}, Addresses: config.Rules{Allow: []string{"wo:recipient@example.org"}}})
+	onlySend, err := Compile(config.Profile{Folders: config.Rules{Allow: []string{"ro:INBOX"}}, Outbound: config.ContentRule{Addresses: config.Rules{Allow: []string{"recipient@example.org"}}}})
 	if err != nil || !onlySend.ReadMessage("INBOX", []string{"unknown@example.org"}) {
 		t.Fatal("send-only address rule should not constrain incoming reads")
 	}

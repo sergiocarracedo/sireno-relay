@@ -16,9 +16,9 @@ profiles:
     folders:
       allow: ["ro:INBOX/Invoices", "rw:Sent/Hermes"]
       deny: ["ro:INBOX/Private"]
-    addresses:
-      allow: ["ro:billing@example.org", "wo:accounting@example.org"]
     inbound:
+      addresses:
+        allow: ["billing@example.org"]
       denied_subjects: ["Password recovery", "re:(?i)reset.*password"]
       remove_links: true
       # Optional. It must read bounded message text from stdin and write only:
@@ -34,6 +34,9 @@ profiles:
         # defaults to remove.
         mode: remove
     outbound:
+      addresses:
+        allow: ["accounting@example.org"]
+      signature: "Sent by Hermes Agent"
       denied_bodies: ["re:(?i)private key"]
       attachments:
         allow: ["application/pdf"]

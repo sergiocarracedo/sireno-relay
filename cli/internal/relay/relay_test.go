@@ -68,7 +68,7 @@ func TestSendNoPartialDelivery(t *testing.T) {
 profiles:
   bot:
     folders: {allow: ["ro:INBOX"]}
-    addresses: {allow: ["wo:friend@example.org"]}
+    outbound: {addresses: {allow: ["friend@example.org"]}, signature: "Sent by Hermes Agent"}
 users:
   bot: {provider: home, profile: bot, token_hash: %s}
 `, tokenHash("agent-token"))
@@ -92,10 +92,10 @@ users:
 	if err := r.Send(context.Background(), id, "me@example.org", []string{"friend@example.org"}, raw); err != nil {
 		t.Fatal(err)
 	}
-	if f.sent != 1 || !strings.HasPrefix(string(f.data), "X-Sireno-Agent: bot\r\n") || strings.Contains(string(f.data), "fake") {
+	if f.sent != 1 || !strings.HasPrefix(string(f.data), "X-Sireno-Agent: bot\r\n") || strings.Contains(string(f.data), "fake") || !strings.Contains(string(f.data), "Hi\n\nSent by Hermes Agent") {
 		t.Fatal("wrong identity or count")
 	}
-	if err := os.WriteFile(path, []byte(strings.Replace(content, "wo:friend@example.org", "wo:else@example.org", 1)), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(strings.Replace(content, "friend@example.org", "else@example.org", 1)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.Send(context.Background(), id, "me@example.org", []string{"friend@example.org"}, raw); err == nil || f.sent != 1 {
@@ -204,7 +204,7 @@ func TestTokenRotationRevokesAuthenticatedIdentity(t *testing.T) {
     imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
     smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
 profiles:
-  bot: {folders: {allow: ["ro:INBOX"]}, addresses: {allow: ["wo:friend@example.org"]}}
+  bot: {folders: {allow: ["ro:INBOX"]}, outbound: {addresses: {allow: ["friend@example.org"]}}}
 users:
   bot: {provider: home, profile: bot, token_hash: %s}
 `, tokenHash("old-token"))

@@ -73,10 +73,9 @@ func (p *Password) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type Profile struct {
-	Folders   Rules       `yaml:"folders"`
-	Addresses Rules       `yaml:"addresses"`
-	Inbound   ContentRule `yaml:"inbound"`
-	Outbound  ContentRule `yaml:"outbound"`
+	Folders  Rules       `yaml:"folders"`
+	Inbound  ContentRule `yaml:"inbound"`
+	Outbound ContentRule `yaml:"outbound"`
 }
 
 type Rules struct {
@@ -85,6 +84,8 @@ type Rules struct {
 }
 
 type ContentRule struct {
+	Addresses      Rules           `yaml:"addresses"`
+	Signature      string          `yaml:"signature"`
 	DeniedSubjects []string        `yaml:"denied_subjects"`
 	DeniedBodies   []string        `yaml:"denied_bodies"`
 	RemoveLinks    bool            `yaml:"remove_links"`
@@ -280,8 +281,6 @@ func (c *Config) Validate() ([]string, error) {
 	for name, profile := range c.Profiles {
 		entries := append([]string{}, profile.Folders.Allow...)
 		entries = append(entries, profile.Folders.Deny...)
-		entries = append(entries, profile.Addresses.Allow...)
-		entries = append(entries, profile.Addresses.Deny...)
 		for _, entry := range entries {
 			parts := strings.SplitN(entry, ":", 2)
 			if len(parts) != 2 || parts[1] == "" || (parts[0] != "ro" && parts[0] != "rw" && parts[0] != "wo") {
@@ -299,6 +298,18 @@ func (c *Config) Validate() ([]string, error) {
 		for _, entry := range append(append([]string{}, profile.Folders.Allow...), profile.Folders.Deny...) {
 			if strings.HasPrefix(entry, "wo:") {
 				return nil, fmt.Errorf("write-only folder rule in profile %q", name)
+			}
+		}
+		for _, addresses := range []Rules{profile.Inbound.Addresses, profile.Outbound.Addresses} {
+			for _, entry := range append(addresses.Allow, addresses.Deny...) {
+				if entry == "" || len(entry) > 512 {
+					return nil, fmt.Errorf("invalid address rule in profile %q", name)
+				}
+				if strings.HasPrefix(entry, "re:") {
+					if _, err := regexp.Compile(entry[3:]); err != nil {
+						return nil, fmt.Errorf("invalid address regex in profile %q: %w", name, err)
+					}
+				}
 			}
 		}
 		for _, content := range []ContentRule{profile.Inbound, profile.Outbound} {

@@ -54,6 +54,17 @@ type Message struct {
 	RemovedAttachments bool
 }
 
+func AddSignature(message *Message, signature string) {
+	if signature == "" {
+		return
+	}
+	if message.Body != "" {
+		message.Body += "\n\n"
+	}
+	message.Body += signature
+	message.Bytes = rebuild(message, message.Body)
+}
+
 func addresses(h mail.Header, name string) ([]string, error) {
 	if h.Get(name) == "" {
 		return nil, nil

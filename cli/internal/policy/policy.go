@@ -16,18 +16,39 @@ type rule struct {
 type set struct{ allow, deny []rule }
 
 // Policy is immutable once compiled. Its methods are shared by every agent entry point.
-type Policy struct{ folders, addresses set }
+type Policy struct{ folders, inbound, outbound set }
 
 func Compile(profile config.Profile) (*Policy, error) {
 	folders, err := compile(profile.Folders, false)
 	if err != nil {
 		return nil, fmt.Errorf("folders: %w", err)
 	}
-	addresses, err := compile(profile.Addresses, true)
+	inbound, err := compileAddresses(profile.Inbound.Addresses)
 	if err != nil {
-		return nil, fmt.Errorf("addresses: %w", err)
+		return nil, fmt.Errorf("inbound addresses: %w", err)
 	}
-	return &Policy{folders: folders, addresses: addresses}, nil
+	outbound, err := compileAddresses(profile.Outbound.Addresses)
+	if err != nil {
+		return nil, fmt.Errorf("outbound addresses: %w", err)
+	}
+	return &Policy{folders: folders, inbound: inbound, outbound: outbound}, nil
+}
+
+func compileAddresses(rules config.Rules) (set, error) {
+	var result set
+	for _, group := range []struct {
+		input  []string
+		output *[]rule
+	}{{rules.Allow, &result.allow}, {rules.Deny, &result.deny}} {
+		for _, value := range group.input {
+			match, err := matcher(value, true)
+			if err != nil {
+				return set{}, err
+			}
+			*group.output = append(*group.output, rule{mode: "rw", match: match})
+		}
+	}
+	return result, nil
 }
 
 func compile(rules config.Rules, address bool) (set, error) {
@@ -109,14 +130,14 @@ func (p *Policy) ReadMessage(folder string, addresses []string) bool {
 		return false
 	}
 	for _, address := range addresses {
-		for _, r := range p.addresses.deny {
+		for _, r := range p.inbound.deny {
 			if (r.mode == "ro" || r.mode == "rw") && r.match(address) {
 				return false
 			}
 		}
 	}
 	hasReadAllow := false
-	for _, r := range p.addresses.allow {
+	for _, r := range p.inbound.allow {
 		if r.mode == "ro" || r.mode == "rw" {
 			hasReadAllow = true
 			break
@@ -127,7 +148,7 @@ func (p *Policy) ReadMessage(folder string, addresses []string) bool {
 	}
 	for _, address := range addresses {
 		allowed := false
-		for _, r := range p.addresses.allow {
+		for _, r := range p.inbound.allow {
 			if (r.mode == "ro" || r.mode == "rw") && r.match(address) {
 				allowed = true
 				break
@@ -153,7 +174,7 @@ func (p *Policy) Send(addresses []string) bool {
 		return false
 	}
 	for _, address := range addresses {
-		if !permits(p.addresses, address, "wo") {
+		if !permits(p.outbound, address, "wo") {
 			return false
 		}
 	}

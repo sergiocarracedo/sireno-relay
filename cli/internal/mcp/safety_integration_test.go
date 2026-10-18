@@ -295,8 +295,8 @@ func writeFixtureConfig(t *testing.T, home, private, work string) string {
 profiles:
   inbox:
     folders: {allow: ["rw:INBOX"]}
-    addresses: {allow: ["ro:allowed@example.org", "wo:recipient@example.org"]}
-    inbound: {attachments: {allow: ["application/pdf"]}}
+    inbound: {addresses: {allow: ["allowed@example.org"]}, attachments: {allow: ["application/pdf"]}}
+    outbound: {addresses: {allow: ["recipient@example.org"]}}
   private:
     folders: {allow: ["ro:Private"]}
 users:

@@ -343,7 +343,7 @@ func TestSendMessageBuildsAttachmentFreeMail(t *testing.T) {
     imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
     smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
 profiles:
-  bot: {folders: {allow: ["ro:INBOX"]}, addresses: {allow: ["wo:friend@example.org"]}}
+  bot: {folders: {allow: ["ro:INBOX"]}, outbound: {addresses: {allow: ["friend@example.org"]}}}
 users:
   bot: {provider: home, profile: bot, token_hash: %x}
 `, digest)

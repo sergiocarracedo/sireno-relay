@@ -219,6 +219,11 @@ func (r *Relay) Send(ctx context.Context, identity *Identity, from string, recip
 	if err := provider.Supports(ctx, r.Provider, latest.Account, provider.CapacitySend); err != nil {
 		return err
 	}
+	mail.AddSignature(message, latest.Profile.Outbound.Signature)
+	data = message.Bytes
+	if latest.TagSent {
+		data = append([]byte(fmt.Sprintf("X-Sireno-Agent: %s\r\n", latest.Name)), data...)
+	}
 	return r.Provider.Send(ctx, latest.Account, from, recipients, data)
 }
 
