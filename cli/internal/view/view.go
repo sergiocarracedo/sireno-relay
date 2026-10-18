@@ -124,7 +124,7 @@ func (s *Service) Page(ctx context.Context, user, providerName, folder string, a
 	}
 	upstream, err := s.Provider.Page(ctx, account, provider.PageRequest{Folder: folder, Page: page, PageSize: 20, Query: query})
 	if err != nil {
-		return nil, false, errors.New("mailbox unavailable")
+		return nil, false, fmt.Errorf("mailbox unavailable: %w", err)
 	}
 	wrapped := pagedClient{Client: s.Provider, messages: upstream.Messages}
 	result, err := (&Service{Provider: wrapped, Store: s.Store}).Snapshot(ctx, user, providerName, folder, account, profile, p)

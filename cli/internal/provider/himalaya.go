@@ -128,7 +128,7 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 	}
 	output, err := h.run(ctx, account, nil, args...)
 	if err != nil {
-		return Page{}, err
+		return Page{}, errors.New("himalaya envelope listing failed")
 	}
 	type envelope struct {
 		ID    json.RawMessage `json:"id"`
@@ -149,7 +149,7 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 		}
 		raw, err := h.run(ctx, account, nil, "message", "read", "--mailbox", request.Folder, "--raw", id)
 		if err != nil {
-			return Page{}, err
+			return Page{}, errors.New("himalaya message read failed")
 		}
 		if len(raw) == 0 || len(raw) > maxCommandOutput {
 			continue

@@ -248,7 +248,7 @@ func messagesWithCursors(r *relay.Relay, cursors *cursorStore) func(context.Cont
 				if errors.Is(err, provider.ErrCapacityUnavailable) {
 					return nil, nil, provider.ErrCapacityUnavailable
 				}
-				return nil, nil, errors.New("mailbox unavailable")
+				return nil, nil, err
 			}
 			if offset > uint32(len(snapshot.Messages)) {
 				return nil, nil, errors.New("mailbox unavailable")

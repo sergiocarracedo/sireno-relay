@@ -23,6 +23,16 @@ type sequenceRunner struct {
 	outputs [][]byte
 }
 
+type failingSecondRunner struct{ calls int }
+
+func (r *failingSecondRunner) Run(_ context.Context, _ []byte, _ ...string) ([]byte, error) {
+	r.calls++
+	if r.calls == 1 {
+		return []byte(`{"envelopes":[{"id":42}]}`), nil
+	}
+	return nil, errors.New("upstream secret")
+}
+
 func (r *sequenceRunner) Run(_ context.Context, _ []byte, args ...string) ([]byte, error) {
 	r.args = append(r.args, append([]string(nil), args...))
 	if len(r.outputs) == 0 {
@@ -131,6 +141,22 @@ func TestHimalayaPageUsesBoundedSearchAndTargetedReads(t *testing.T) {
 	}
 	if len(runner.args) != 2 || !containsSequence(runner.args[0], "envelope", "search", "--mailbox", "INBOX", "--page", "2", "--page-size", "20", "from", "billing@example.org") || !containsSequence(runner.args[1], "message", "read", "--mailbox", "INBOX", "--raw", "42") {
 		t.Fatalf("unexpected commands: %#v", runner.args)
+	}
+}
+
+func TestHimalayaPageClassifiesSafeOperationFailures(t *testing.T) {
+	account := config.Provider{Address: "owner@example.org", IMAP: config.Server{Address: "imap.example.org:993", Username: "owner", Password: config.Password{Value: "secret"}}, SMTP: config.Server{Address: "smtp.example.org:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}}}
+	for name, runner := range map[string]CommandRunner{
+		"envelope listing": &recordingRunner{err: errors.New("upstream secret")},
+		"message read":     &failingSecondRunner{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := (Himalaya{Runner: runner}).Page(context.Background(), account, PageRequest{Folder: "INBOX", Page: 1, PageSize: 20})
+			want := "himalaya " + name + " failed"
+			if err == nil || err.Error() != want || strings.Contains(err.Error(), "secret") {
+				t.Fatalf("error=%v", err)
+			}
+		})
 	}
 }
 
