@@ -1,0 +1,16 @@
+docs/public/configuration.md
+  h_f90ee31b03fc41 1-18
+docs/public/security.md
+  h_f90ee31b03fc41 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8db20d7a53d2901291b6aba09a32c005b475f5c3",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
