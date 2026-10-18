@@ -233,9 +233,6 @@ func messagesWithCursors(r *relay.Relay, cursors *cursorStore) func(context.Cont
 		if identity == nil || args.Folder == "" || len(args.Query) > 512 || strings.ContainsAny(args.Query, "\r\n\x00") {
 			return nil, nil, errors.New("mailbox unavailable")
 		}
-		if err := requireVisibleFolder(ctx, r, identity, args.Folder); err != nil {
-			return nil, nil, err
-		}
 		page, offset, err := cursors.page(identity, args.Folder, args.Query, args.Cursor)
 		if err != nil {
 			return nil, nil, errors.New("mailbox unavailable")
@@ -247,6 +244,9 @@ func messagesWithCursors(r *relay.Relay, cursors *cursorStore) func(context.Cont
 			if err != nil {
 				if errors.Is(err, provider.ErrCapacityUnavailable) {
 					return nil, nil, provider.ErrCapacityUnavailable
+				}
+				if err.Error() == "mailbox unavailable" {
+					return nil, nil, errors.New("folder unavailable; use list_folders to select a visible folder")
 				}
 				return nil, nil, err
 			}
@@ -274,6 +274,9 @@ func messagesWithCursors(r *relay.Relay, cursors *cursorStore) func(context.Cont
 			}
 		}
 		result := map[string]any{"messages": items}
+		if len(items) == 0 {
+			result["notice"] = "no messages found; use list_folders to choose another visible folder"
+		}
 		if nextPage != 0 {
 			next, err := cursors.next(identity, args.Folder, args.Query, nextPage, nextOffset)
 			if err != nil {
@@ -284,28 +287,6 @@ func messagesWithCursors(r *relay.Relay, cursors *cursorStore) func(context.Cont
 		data, _ := json.Marshal(result)
 		return &gomcp.CallToolResult{Content: []gomcp.Content{&gomcp.TextContent{Text: string(data)}}, StructuredContent: result}, result, nil
 	}
-}
-
-// requireVisibleFolder lets an agent recover from a stale or guessed folder
-// name without revealing folders outside its current policy.
-func requireVisibleFolder(ctx context.Context, r *relay.Relay, identity *relay.Identity, requested string) error {
-	folders, err := r.Folders(ctx, identity)
-	if err != nil {
-		return errors.New("mailbox unavailable")
-	}
-	for _, folder := range folders {
-		if folder == requested {
-			return nil
-		}
-	}
-	if len(folders) == 0 {
-		return errors.New("folder unavailable; no visible folders are available")
-	}
-	quoted := make([]string, 0, len(folders))
-	for _, folder := range folders {
-		quoted = append(quoted, strconv.Quote(folder))
-	}
-	return errors.New("folder unavailable; available folders: " + strings.Join(quoted, ", "))
 }
 
 func envelopeFromMessage(message view.Message) envelope {

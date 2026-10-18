@@ -50,7 +50,7 @@ func TestFixturePaginationHidesDeniedCandidates(t *testing.T) {
 }
 
 func TestFixtureConstraintSuite(t *testing.T) {
-	t.Run("unknown folders suggest only visible alternatives", func(t *testing.T) {
+	t.Run("unknown folders direct the agent to list folders without a preflight lookup", func(t *testing.T) {
 		path := writeFixtureConfig(t, homeToken, privateToken, workToken)
 		content, err := os.ReadFile(path)
 		if err != nil {
@@ -61,10 +61,9 @@ func TestFixtureConstraintSuite(t *testing.T) {
 			t.Fatal(err)
 		}
 		p := seededFixture()
-		p.FoldersByAddress["home@example.org"] = []string{"Agent/Inbox", "Private"}
 		r := fixtureRelay(t, path, p)
 		_, _, err = messagesWithCursors(r, newCursorStore())(fixtureContext(fixtureIdentity(t, r, homeToken)), nil, listMessagesArgs{Folder: "INBOX"})
-		if err == nil || err.Error() != `folder unavailable; available folders: "Agent/Inbox"` {
+		if err == nil || err.Error() != "folder unavailable; use list_folders to select a visible folder" {
 			t.Fatalf("error=%v", err)
 		}
 		if got := len(p.PageCallSnapshot()); got != 0 {
