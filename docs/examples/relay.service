@@ -2,8 +2,10 @@
 Description=SirenoRELAY email relay
 
 [Service]
+Type=simple
 ExecStart=/home/owner/.local/bin/sirenorelay serve --config /home/owner/.config/sirenorelay/config.yml
 Restart=on-failure
+RestartSec=2
 NoNewPrivileges=yes
 PrivateTmp=yes
 

@@ -7,8 +7,11 @@ description: Commands, flags, expected output, and safe operational use.
 
 The executable is `sirenorelay`. Unless stated otherwise, commands that load
 configuration accept `--config PATH`; without it they use
-`~/.config/sirenorelay/config.yml`. Commands require the Himalaya executable in
-`PATH`, except version and shell-completion generation.
+`~/.config/sirenorelay/config.yml`. For compatibility, if that file does not
+exist, SirenoRELAY uses an existing `~/.config/sireno-relay/config.yml`.
+Commands require the Himalaya executable in
+`PATH`, except version, shell-completion generation, and non-starting service
+commands such as `service status` and `service uninstall`.
 
 ## `sirenorelay onboard`
 
@@ -42,9 +45,23 @@ configuration may select another loopback address. Run it under a service
 manager for production. It watches the config file and reports valid reloads;
 subsequent operations use current policy.
 
-`--debug` is for controlled troubleshooting only: it enables debug logging and
-MCP content capture to stdout. Treat this output as sensitive mail data and do
-not enable it in normal service operation.
+`--debug` is for controlled troubleshooting only: it enables debug-level
+operational metadata on stdout. SirenoRELAY does not record MCP request or
+response content, including when `logging.mcp.capture_content` is enabled.
+
+## `sirenorelay service ACTION [--config PATH]`
+
+Manages the persistent, owner-scoped MCP relay. `ACTION` is one of `install`,
+`start`, `stop`, `restart`, `status`, or `uninstall`. Run `install`, then
+`start`, after validating owner configuration. Linux uses a systemd user unit;
+macOS uses an owner-scoped launchd service. These do not require `sudo` and
+must be run as the OS account that owns the configuration and secrets.
+
+`install`, `start`, and `restart` validate configuration and require Himalaya.
+`status`, `stop`, and `uninstall` remain available if Himalaya has been removed,
+so a broken installation can still be inspected or cleaned up. Add
+`--config /absolute/path` when the service should use a non-default config; use
+the same path for every lifecycle command.
 
 ## `sirenorelay user token rotate --user NAME [--config PATH]`
 

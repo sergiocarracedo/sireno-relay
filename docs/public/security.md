@@ -82,8 +82,8 @@ public.
   the mail server directly.
 - Mail content is untrusted input. Filtering and sanitization reduce exposure;
   they do not make email safe to follow as instructions.
-- `serve --debug` enables MCP content capture to stdout. Do not use it casually
-  with real mail.
+- `serve --debug` emits debug-level operational metadata to stdout. MCP request
+  and response content is never recorded.
 - SMTP delivery can become uncertain if the connection fails after submission
   starts. Check the Sent folder before retrying manually.
 - Use high-entropy tokens, one per agent. Store only their hashes in

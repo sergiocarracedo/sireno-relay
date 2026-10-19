@@ -120,13 +120,29 @@ func TestHimalayaCommandFailureIsRedacted(t *testing.T) {
 	}
 }
 
-func TestHimalayaDoesNotAdvertiseUnprovenWrites(t *testing.T) {
+func TestHimalayaAdvertisesFlagUpdates(t *testing.T) {
 	capabilities, err := (Himalaya{}).Capabilities(context.Background(), config.Provider{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if capabilities.Has(CapacityUpdateFlags) {
-		t.Fatal("Himalaya advertised uncharacterized flag updates")
+	if !capabilities.Has(CapacityUpdateFlags) {
+		t.Fatal("Himalaya did not advertise supported flag updates")
+	}
+}
+
+func TestHimalayaStoreFlagsUsesTargetedCommand(t *testing.T) {
+	runner := &recordingRunner{}
+	account := config.Provider{
+		Address: "owner@example.org",
+		IMAP:    config.Server{Address: "imap.example.org:993", Username: "owner", Password: config.Password{Value: "secret"}},
+		SMTP:    config.Server{Address: "smtp.example.org:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}},
+	}
+	err := (Himalaya{Runner: runner}).StoreFlags(context.Background(), account, "INBOX", Message{ID: "42"}, []Flag{FlagSeen, FlagFlagged}, FlagAdd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.args) != 1 || !containsSequence(runner.args[0], "flag", "add", "--mailbox", "INBOX", "--flag", "seen", "--flag", "flagged", "42") {
+		t.Fatalf("unexpected command: %#v", runner.args)
 	}
 }
 
@@ -140,8 +156,20 @@ func TestHimalayaPageUsesBoundedSearchAndTargetedReads(t *testing.T) {
 	if err != nil || len(page.Messages) != 1 || page.Messages[0].ID != "42" || page.Messages[0].Flags[0] != FlagSeen || page.HasMore {
 		t.Fatalf("page=%#v err=%v", page, err)
 	}
-	if len(runner.args) != 2 || !containsSequence(runner.args[0], "envelope", "search", "--mailbox", "INBOX", "--page", "2", "--page-size", "20", "from", "billing@example.org") || !containsSequence(runner.args[1], "message", "read", "--mailbox", "INBOX", "--raw", "42") {
+	if len(runner.args) != 2 || !containsSequence(runner.args[0], "envelope", "search", "--mailbox", "INBOX", "--page", "2", "--page-size", "20", "--", "from", "billing@example.org") || !containsSequence(runner.args[1], "message", "read", "--mailbox", "INBOX", "--raw", "42") {
 		t.Fatalf("unexpected commands: %#v", runner.args)
+	}
+}
+
+func TestHimalayaPageDoesNotInterpretQueryTermsAsOptions(t *testing.T) {
+	runner := &recordingRunner{output: []byte(`[]`)}
+	account := config.Provider{Address: "owner@example.org", IMAP: config.Server{Address: "imap:993", Username: "owner", Password: config.Password{Value: "secret"}}, SMTP: config.Server{Address: "smtp:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}}}
+	_, err := (Himalaya{Runner: runner}).Page(context.Background(), account, PageRequest{Folder: "INBOX", Page: 1, PageSize: 20, Query: "--config /owner-only/config.toml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.args) != 1 || !containsSequence(runner.args[0], "--page-size", "20", "--", "--config", "/owner-only/config.toml") {
+		t.Fatalf("query options escaped the terminator: %#v", runner.args)
 	}
 }
 

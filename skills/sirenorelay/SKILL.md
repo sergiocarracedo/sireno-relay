@@ -24,8 +24,9 @@ tools without receiving the mailbox's IMAP/SMTP credentials.
 - A loopback listener is not isolation from same-user processes. Do not run an
   untrusted agent as the relay service account. Do not grant an agent Docker
   socket, host administration, process inspection, or access to relay mounts.
-- Treat content-capturing debug logs as sensitive. `serve --debug` captures MCP
-  content to stdout; keep it off for normal operation.
+- `serve --debug` writes debug-level operational metadata to stdout. MCP
+  request and response content is never recorded, including when
+  `logging.mcp.capture_content` is enabled.
 
 ## Workflow
 
@@ -134,8 +135,8 @@ delete, move, or arbitrary folder mutation.
   references, rules, and provider/user configuration.
 - `sirenorelay policy-check --user NAME --folder NAME [--config PATH]`: show
   whether that folder is allowed and how many messages are visible.
-- `sirenorelay serve [--config PATH]`: run the MCP endpoint. Avoid `--debug`
-  with real mail because it enables content capture to stdout.
+- `sirenorelay serve [--config PATH]`: run the MCP endpoint. `--debug` emits
+  operational metadata to stdout; MCP content is never logged.
 - `sirenorelay user token rotate --user NAME [--config PATH]`: replace an
   agent's bearer token interactively; the raw value is shown once.
 - `sirenorelay version`: print the build version.

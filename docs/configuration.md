@@ -12,7 +12,9 @@ sirenorelay onboard
 
 It uses the provider name `default`, connects to the account, lists folders for keyboard multiple selection (↑/↓ to move, Space to select, Enter to continue), creates a read-only default profile, asks separately for allowed inbound senders and outbound recipients, and displays a bearer token once. If listing folders fails, it lets you correct the provider settings and try again. It stores its completion marker at `~/.config/sirenorelay/onboard`, config at `~/.config/sirenorelay/config.yml`, and owner-only upstream secret files below that directory. It will not overwrite an existing configuration. The wizard supports only IMAP/SMTP; use manual YAML for another Himalaya backend.
 
-Without `--config`, SirenoRELAY uses `~/.config/sirenorelay/config.yml`. An explicit `--config` always wins.
+Without `--config`, SirenoRELAY uses `~/.config/sirenorelay/config.yml`. If
+that file does not exist, it uses an existing legacy
+`~/.config/sireno-relay/config.yml`. An explicit `--config` always wins.
 
 For a manual setup:
 

@@ -6,8 +6,9 @@ description: Complete reference for provider credentials, policy profiles, agent
 # Configuration reference
 
 SirenoRELAY reads an owner-managed YAML file. The default path is
-`~/.config/sirenorelay/config.yml`; `--config /absolute/path` selects another
-file for commands that support it. The file must be a regular file owned by the
+`~/.config/sirenorelay/config.yml`; if that file does not exist, an existing
+`~/.config/sireno-relay/config.yml` is used for compatibility. `--config
+/absolute/path` selects another file for commands that support it. The file must be a regular file owned by the
 relay process and have no group/other permissions (normally `chmod 600`).
 Unknown and duplicate YAML keys are errors. Environment interpolation uses
 `{env:NAME}` in string values; a missing variable is an error.
@@ -154,14 +155,12 @@ the same OS user.
 - `rotation.retention_days`: non-negative retention period.
 - `rotation.max_file_size`: non-negative byte count or `KiB`, `MiB`, or `GiB`
   size (for example `100MiB`).
-- `mcp.capture_content`: defaults to false. When enabled, request/response
-  content may be recorded and requires a file target; use only when necessary,
-  with strict access and retention controls. Operational audit metadata does
-  not include credentials or bearer tokens.
+- `mcp.capture_content`: retained for configuration compatibility. Request and
+  response content is never recorded; audit output is bounded operational
+  metadata and does not include credentials or bearer tokens.
 
-The `serve --debug` flag enables content capture and sends debug output to
-stdout. Avoid it with real mail unless you have explicitly accepted the data
-exposure risk.
+The `serve --debug` flag enables debug-level operational metadata on stdout; it
+does not enable MCP content capture.
 
 ## Validate and check policy
 

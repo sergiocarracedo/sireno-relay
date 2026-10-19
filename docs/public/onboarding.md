@@ -64,13 +64,27 @@ sirenorelay policy-check --user default --folder INBOX
 Use the actual user and folder names shown by your generated configuration.
 Review the policy before providing the token to an agent.
 
-## Run
+## Run as a service
 
-Run the relay as the owner/service account, not as the agent:
+After onboarding and validation, install and start the owner-scoped service:
 
 ```sh
-sirenorelay serve --config /home/relay/.config/sirenorelay/config.yml
+sirenorelay service install
+sirenorelay service start
+sirenorelay service status
 ```
+
+Pass `--config /absolute/path` to every service command when the configuration
+is not in the default location. The Linux installer creates and enables a
+systemd **user** service; it does not need `sudo` and runs as the owner account.
+On macOS it creates an owner-scoped launchd service. Both use the resolved
+binary and configuration paths, restart after a failure, and shut down cleanly
+when stopped.
+
+Manage its lifecycle with `sirenorelay service restart`,
+`sirenorelay service stop`, or `sirenorelay service uninstall`. Keep the relay
+under the owner/service account, not the agent account. For short-lived local
+development, run `sirenorelay serve` in the foreground instead.
 
 The default MCP listener is `127.0.0.1:8080`. The agent's MCP client needs that
 endpoint and its bearer token, but must not be able to read the configuration,

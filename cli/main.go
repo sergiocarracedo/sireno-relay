@@ -24,6 +24,7 @@ import (
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/policy"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
+	serviceinternal "github.com/sergiocarracedo/sireno-ai-relay/internal/service"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/view"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -79,13 +80,16 @@ func newRootCmd(out, errOut io.Writer) *cobra.Command {
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError{err} })
-	root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if cmd.Parent() != nil && cmd.Parent().Name() == "service" {
+			return nil
+		}
 		if _, err := findExecutable("himalaya"); err != nil {
 			return errors.New("Himalaya CLI is required but was not found in PATH; install it from https://github.com/pimalaya/himalaya#installation")
 		}
 		return nil
 	}
-	root.AddCommand(newVersionCmd(), newCompletionCmd(root), newConfigCheckCmd(newViper()), newPolicyCheckCmd(newViper()), newServeCmd(newViper()), newOnboardCmd(), newUserCmd())
+	root.AddCommand(newVersionCmd(), newCompletionCmd(root), newConfigCheckCmd(newViper()), newPolicyCheckCmd(newViper()), newServeCmd(newViper()), newOnboardCmd(), newUserCmd(), newServiceCmd(newViper()))
 	return root
 }
 
@@ -111,7 +115,15 @@ func defaultConfigPath() string {
 	if err != nil {
 		return "config.yml"
 	}
-	return filepath.Join(dir, "sirenorelay", "config.yml")
+	path := filepath.Join(dir, "sirenorelay", "config.yml")
+	if _, err := os.Stat(path); err == nil || !errors.Is(err, os.ErrNotExist) {
+		return path
+	}
+	legacyPath := filepath.Join(dir, "sireno-relay", "config.yml")
+	if _, err := os.Stat(legacyPath); err == nil {
+		return legacyPath
+	}
+	return path
 }
 
 func newConfigCheckCmd(v *viper.Viper) *cobra.Command {
@@ -154,6 +166,49 @@ func newServeCmd(v *viper.Viper) *cobra.Command {
 		return serve(cmd.Context(), cmd.OutOrStdout(), v.GetString("config"), debug)
 	}
 	return cmd
+}
+
+func newServiceCmd(v *viper.Viper) *cobra.Command {
+	serviceCmd := &cobra.Command{Use: "service", Short: "Manage the owner-scoped MCP relay service"}
+	bindString(v, serviceCmd.PersistentFlags(), "config", defaultConfigPath(), "owner-only YAML config")
+	for _, action := range []string{"install", "start", "stop", "restart", "status", "uninstall"} {
+		action := action
+		command := &cobra.Command{
+			Use:   action,
+			Short: serviceCommandDescription(action),
+			Args:  usageArgs(cobra.NoArgs),
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				path := v.GetString("config")
+				if action == "install" || action == "start" || action == "restart" {
+					if _, _, err := loadConfig(path, cmd.OutOrStdout()); err != nil {
+						return err
+					}
+					if _, err := findExecutable("himalaya"); err != nil {
+						return errors.New("Himalaya CLI is required but was not found in PATH; install it from https://github.com/pimalaya/himalaya#installation")
+					}
+				}
+				status, err := serviceinternal.Control(action, path)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Service %s: %s\n", action, status)
+				return nil
+			},
+		}
+		serviceCmd.AddCommand(command)
+	}
+	return serviceCmd
+}
+
+func serviceCommandDescription(action string) string {
+	return map[string]string{
+		"install":   "Install the owner-scoped MCP relay service",
+		"start":     "Start the MCP relay service",
+		"stop":      "Stop the MCP relay service",
+		"restart":   "Restart the MCP relay service",
+		"status":    "Show MCP relay service status",
+		"uninstall": "Uninstall the MCP relay service",
+	}[action]
 }
 
 func newVersionCmd() *cobra.Command {

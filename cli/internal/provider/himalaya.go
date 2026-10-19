@@ -66,11 +66,12 @@ func (Himalaya) Capabilities(context.Context, config.Provider) (Capabilities, er
 	// Copy, move, deletion, append, and mailbox mutation stay disabled until
 	// target-scoped behavior is proven across supported upstream backends.
 	return Capabilities{
-		CapacityFolders: true,
-		CapacityList:    true,
-		CapacitySearch:  true,
-		CapacityRead:    true,
-		CapacitySend:    true,
+		CapacityFolders:     true,
+		CapacityList:        true,
+		CapacitySearch:      true,
+		CapacityRead:        true,
+		CapacitySend:        true,
+		CapacityUpdateFlags: true,
 	}, nil
 }
 
@@ -124,6 +125,9 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 	}
 	args := []string{"--json", "envelope", command, "--mailbox", request.Folder, "--page", strconv.FormatUint(uint64(request.Page), 10), "--page-size", strconv.FormatUint(uint64(request.PageSize), 10)}
 	if request.Query != "" {
+		// Query terms are agent-controlled. The option terminator keeps them from
+		// overriding the temporary owner-controlled Himalaya configuration.
+		args = append(args, "--")
 		args = append(args, strings.Fields(request.Query)...)
 	}
 	output, err := h.run(ctx, account, nil, args...)

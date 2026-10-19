@@ -72,6 +72,22 @@ func TestDefaultConfigPathUsesSirenorelayConfigDirectory(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigPathUsesLegacyDirectoryWhenNeeded(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	legacyDir := filepath.Join(configHome, "sireno-relay")
+	if err := os.MkdirAll(legacyDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(legacyDir, "config.yml")
+	if err := os.WriteFile(legacyPath, []byte("legacy"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got := defaultConfigPath(); got != legacyPath {
+		t.Fatalf("defaultConfigPath()=%q, want %q", got, legacyPath)
+	}
+}
+
 func TestCommandTooling(t *testing.T) {
 	previous := findExecutable
 	findExecutable = func(string) (string, error) { return "/usr/bin/himalaya", nil }
@@ -121,5 +137,22 @@ func TestServeAcceptsDebugFlag(t *testing.T) {
 	flag := serve.Flags().Lookup("debug")
 	if flag == nil || flag.DefValue != "false" {
 		t.Fatalf("debug flag=%#v", flag)
+	}
+}
+
+func TestServiceCommandsAcceptAnOwnerConfigFlag(t *testing.T) {
+	cmd := newRootCmd(io.Discard, io.Discard)
+	service, _, err := cmd.Find([]string{"service"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"install", "start", "stop", "restart", "status", "uninstall"} {
+		subcommand, _, findErr := service.Find([]string{action})
+		if findErr != nil {
+			t.Fatalf("find %s: %v", action, findErr)
+		}
+		if subcommand.InheritedFlags().Lookup("config") == nil {
+			t.Errorf("%s does not inherit --config", action)
+		}
 	}
 }

@@ -99,6 +99,11 @@ CLI flags can also be supplied as `SIRENO_*` environment variables when a comman
 
 ## Operations
 
-Run `sirenorelay serve` in the foreground for development; Ctrl+C closes the MCP listener. For a persistent installation, use the included user service example after installing a compiled binary. Do not bind to non-loopback addresses in v1.
+Run `sirenorelay serve` in the foreground for development; Ctrl+C closes the MCP
+listener. For a persistent owner-side installation, run
+`sirenorelay service install`, `sirenorelay service start`, and
+`sirenorelay service status`. It creates an owner-scoped Linux systemd user
+service or macOS launchd service—no `sudo` required. Do not bind to
+non-loopback addresses in v1.
 
 See `docs/configuration.md`, `docs/policy.md`, `docs/security.md`, and `docs/operations.md` for details.
