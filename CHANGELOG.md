@@ -1,0 +1,34 @@
+# Changelog
+
+## 1.0.0 (2026-10-19)
+
+
+### Features
+
+* add policy-safe MCP message updates ([d2d1551](https://github.com/sergiocarracedo/sireno-relay/commit/d2d1551e83bf18805b32ceb7c1fe0fb5a057fabe))
+* **email:** add local policy-enforced relay ([26f8321](https://github.com/sergiocarracedo/sireno-relay/commit/26f8321f7264e132cafc387669f2fd3b46fa85d2))
+* **mcp:** add safe message flag updates ([88ec24a](https://github.com/sergiocarracedo/sireno-relay/commit/88ec24afe1d898dda385daf5d32e5d29da158cb4))
+* **mcp:** expose message read state and attachment counts ([a2f1ebf](https://github.com/sergiocarracedo/sireno-relay/commit/a2f1ebf1ab83fde0dabe9a1b1b733aac282e2bc5))
+* **mcp:** fill filtered message pages ([ac82b9b](https://github.com/sergiocarracedo/sireno-relay/commit/ac82b9b7de9b8665ebf725679efb6ecd1bd8c50e))
+* **mcp:** route mail access through Himalaya ([d2be07b](https://github.com/sergiocarracedo/sireno-relay/commit/d2be07b2eb3fc9367ef873c56236c94e84a4aa83))
+* **mcp:** suggest visible folders for unknown mailbox ([beebbd8](https://github.com/sergiocarracedo/sireno-relay/commit/beebbd82c891d16ad0cb56e622a89549381561b7))
+* onboard ([4bddc92](https://github.com/sergiocarracedo/sireno-relay/commit/4bddc92e9091770df5b3ca71a15294c3def6b79e))
+* onboard ([9486ebd](https://github.com/sergiocarracedo/sireno-relay/commit/9486ebd909f19e0cc72ffb11949675e9b17c309e))
+* **policy:** split inbound and outbound address rules ([836653d](https://github.com/sergiocarracedo/sireno-relay/commit/836653d4b67e73321d4448d541616a315ac7e501))
+* **search:** add ephemeral Himalaya configuration ([473495c](https://github.com/sergiocarracedo/sireno-relay/commit/473495cf57d10f5c781be086ebea69a57b885ee8))
+* **site:** add Sireno Astro landing page ([f8357b7](https://github.com/sergiocarracedo/sireno-relay/commit/f8357b7d08c2fe0bf3c8ae3af87c847bd0b125f4))
+* website ([94aab8c](https://github.com/sergiocarracedo/sireno-relay/commit/94aab8cd33aa541c8493dad7dfacf70a3f4f7e3d))
+
+
+### Bug Fixes
+
+* **build:** keep relay binary at root output ([8ee5bef](https://github.com/sergiocarracedo/sireno-relay/commit/8ee5bef93028fe0276cec743e852d3616cb7b617))
+* clarify relay access diagram ([f9c57c8](https://github.com/sergiocarracedo/sireno-relay/commit/f9c57c8e6128dc4dc5a9777768d2d6793c190bc6))
+* **mcp:** direct unknown folders to discovery tool ([784f3df](https://github.com/sergiocarracedo/sireno-relay/commit/784f3dfa533bdbe724307c77920d8a0d2c761a29))
+* **mcp:** preserve safe Himalaya failure stages ([05317d0](https://github.com/sergiocarracedo/sireno-relay/commit/05317d049169682a15dba4f1b755471334118b0b))
+* **policy:** require every message address be allowed ([5e89053](https://github.com/sergiocarracedo/sireno-relay/commit/5e89053091537e91d1f21e42a7a5e1e380e3637a))
+* **provider:** classify redacted Himalaya JSON errors ([9558c48](https://github.com/sergiocarracedo/sireno-relay/commit/9558c48deb48a8121aebda9c8379266592c7c9ea))
+* **provider:** parse Himalaya v2 envelope flags ([45eb619](https://github.com/sergiocarracedo/sireno-relay/commit/45eb6196e9f17b3b321f102a5ccb0a64fa68efe9))
+* **provider:** parse Himalaya v2 JSON results ([9135a08](https://github.com/sergiocarracedo/sireno-relay/commit/9135a08578b9ed36bc1e91451bd9cb32bcc3b05f))
+* **site:** deploy favicon and enable GitHub Pages ([448468a](https://github.com/sergiocarracedo/sireno-relay/commit/448468a9c0e0d190fa909fbfaa0155b7ba782c5d))
+* update homepage tagline ([a67638e](https://github.com/sergiocarracedo/sireno-relay/commit/a67638eea11126f51b749964c0c9086069d8f822))
