@@ -1,5 +1,6 @@
 ---
 import "../styles/site.css";
+import { withBase } from "../lib/with-base";
 
 const { title = "SirenoRELAY", description = "Policy-filtered email access for agents." } = Astro.props;
 ---
@@ -10,8 +11,8 @@ const { title = "SirenoRELAY", description = "Policy-filtered email access for a
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
-    <link rel="icon" href="/sireno-relay/favicon.ico" sizes="any" />
-    <link rel="icon" href="/sireno-relay/favicon.png" type="image/png" />
+    <link rel="icon" href={withBase("/favicon.ico")} sizes="any" />
+    <link rel="icon" href={withBase("/favicon.png")} type="image/png" sizes="512x512" />
     <meta name="color-scheme" content="light dark" />
     <script is:inline>try { document.querySelector('meta[name="color-scheme"]').content = localStorage.getItem("color-scheme") || "light dark"; } catch {}</script>
     <title>{title}</title>
