@@ -14,35 +14,16 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
 <SiteLayout title="SirenoRELAY — constrained email for agents" description="Give agents narrowly scoped, policy-filtered email access without upstream credentials.">
   <SiteHeader home />
   <main>
-    <section class="hero hero--stitch shell">
+    <section class="hero hero--stitch">
       <div class="hero-aura" aria-hidden="true"></div>
-      <div class="hero-copy">
-        <p class="eyebrow eyebrow--pill"><span class="status-pulse"></span> YOUR MAILBOX GUARDIAN · v{version}</p>
-        <h1>Email access, <em>on your terms.</em></h1>
-        <p class="lede">A policy boundary between your mailbox and an agent. It lets the useful mail through—and keeps the rest, including your credentials, where it belongs.</p>
-        <div class="hero-actions"><Button href="#install">Getting started <span>→</span></Button><Button href="#comparison" variant="secondary">Watch it work <span>↓</span></Button></div>
+      <div class="hero__inner shell">
+        <div class="hero-copy">
+          <p class="eyebrow eyebrow--pill"><span class="status-pulse"></span> YOUR MAILBOX GUARDIAN · v{version}</p>
+          <h1>Email access, <em>on your terms.</em></h1>
+          <p class="lede">A policy boundary between your mailbox and an agent. It lets the useful mail through—and keeps the rest, including your credentials, where it belongs.</p>
+          <div class="hero-actions"><Button href="#install">Getting started <span>→</span></Button><Button href="#comparison" variant="secondary">Watch it work <span>↓</span></Button></div>
+        </div>
       </div>
-      <figure class="hero-figure hero-canvas" aria-label="An owner mailbox sends approved messages through the SirenoRELAY policy boundary to an agent.">
-        <svg viewBox="0 0 620 560" role="img" aria-hidden="true">
-          <defs><pattern id="paper-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M12 0H0V12" fill="none" stroke="currentColor" stroke-width=".45" opacity=".13"/></pattern></defs>
-          <rect x="34" y="42" width="552" height="452" rx="2" class="figure-paper"/>
-          <rect x="34" y="42" width="552" height="452" rx="2" fill="url(#paper-grid)" class="figure-grid"/>
-          <path d="M73 128H222V405H73M401 128H548V405H401" class="figure-frame"/>
-          <text x="74" y="101" class="figure-label">OWNER MAILBOX</text><text x="401" y="101" class="figure-label">AGENT VIEW</text>
-          <path d="M88 186h76l18 19h49v108H88z" class="figure-folder"/><path d="M88 205h143" class="figure-line"/>
-          <text x="108" y="247" class="figure-body">Invoices</text><text x="108" y="274" class="figure-small">3 messages</text>
-          <path d="M104 315h103M104 336h84M104 357h97" class="figure-mail"/>
-          <path d="M255 115V420" class="figure-boundary"/><text x="241" y="94" class="figure-boundary-label">POLICY</text>
-          <path d="M224 246H255M255 246h43" class="figure-route"/><path d="M286 237l12 9-12 9" class="figure-route"/>
-          <circle cx="255" cy="246" r="17" class="figure-seal"/><path d="m248 246 5 5 10-11" class="figure-check"/>
-          <path d="M326 188h148v159H326z" class="figure-agent"/><path d="M326 219h148" class="figure-line"/><circle cx="347" cy="204" r="5" class="figure-dot"/><text x="365" y="209" class="figure-small">ALLOWED RESULTS</text>
-          <path d="M347 252h101M347 275h78M347 299h92" class="figure-mail figure-allowed"/>
-          <path d="M104 389h103" class="figure-denied"/><path d="m152 379 14 20m0-20-14 20" class="figure-denied"/>
-          <text x="99" y="429" class="figure-small">hidden by policy</text>
-          <text x="73" y="462" class="figure-caption">CREDENTIALS REMAIN WITH THE OWNER</text>
-        </svg>
-        <figcaption><span>Policy enforced</span> The relay makes the mailbox legible to an agent—without making it available.</figcaption>
-      </figure>
     </section>
 
     <RelayIsometricDiagram />
