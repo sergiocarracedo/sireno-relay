@@ -1,6 +1,9 @@
 ---
-import BrandLink from "../components/BrandLink.astro";
+import Button from "../components/Button.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import SiteHeader from "../components/SiteHeader.astro";
 import MailBoundaryDiagram from "../components/MailBoundaryDiagram.astro";
+import RelayIsometricDiagram from "../components/RelayIsometricDiagram.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
 import { withBase } from "../lib/with-base";
 import { version } from "../lib/version";
@@ -9,19 +12,18 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
 ---
 
 <SiteLayout title="SirenoRELAY — constrained email for agents" description="Give agents narrowly scoped, policy-filtered email access without upstream credentials.">
-  <header class="site-header shell">
-    <BrandLink />
-    <nav aria-label="Main navigation"><a href={withBase("/docs")}>Docs</a><a href="https://github.com/sergiocarracedo/sireno-relay">GitHub ↗</a></nav>
-  </header>
+  <SiteHeader home />
   <main>
-    <section class="hero shell">
+    <section class="hero hero--stitch shell">
+      <div class="hero-aura" aria-hidden="true"></div>
       <div class="hero-copy">
-        <p class="eyebrow"><span class="eyebrow-mark"></span> A PRIVATE POST OFFICE <span>v{version}</span></p>
-        <h1>Email access,<br /><em>on your terms.</em></h1>
+        <p class="eyebrow eyebrow--pill"><span class="status-pulse"></span> A PRIVATE POST OFFICE · v{version}</p>
+        <h1>Email access, <em>on your terms.</em></h1>
         <p class="lede">A policy boundary between your mailbox and an agent. It lets the useful mail through—and keeps the rest, including your credentials, where it belongs.</p>
-        <div class="hero-actions"><a class="button button--solid" href={withBase("/docs/onboarding")}>Set up the boundary <span>→</span></a><a class="button button--text" href="#boundary">Watch it work <span>↓</span></a></div>
+        <div class="hero-actions"><Button href="#install">Getting started <span>→</span></Button><Button href="#comparison" variant="secondary">Watch it work <span>↓</span></Button></div>
       </div>
-      <figure class="hero-figure" aria-label="An owner mailbox sends approved messages through the SirenoRELAY policy boundary to an agent.">
+      <figure class="hero-figure hero-canvas" aria-label="An owner mailbox sends approved messages through the SirenoRELAY policy boundary to an agent.">
+        <div class="canvas-bar"><span><i></i><i></i><i></i> live-mcp-pipeline: user_agent_worker_4</span><b>▣ RFC-822 scoped proxy</b></div>
         <svg viewBox="0 0 620 560" role="img" aria-hidden="true">
           <defs><pattern id="paper-grid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M12 0H0V12" fill="none" stroke="currentColor" stroke-width=".45" opacity=".13"/></pattern></defs>
           <rect x="34" y="42" width="552" height="452" rx="2" class="figure-paper"/>
@@ -40,14 +42,16 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
           <text x="99" y="429" class="figure-small">hidden by policy</text>
           <text x="73" y="462" class="figure-caption">CREDENTIALS REMAIN WITH THE OWNER</text>
         </svg>
-        <figcaption><span>01</span> The relay makes the mailbox legible to an agent—without making it available.</figcaption>
+        <figcaption><span>Policy enforced</span> The relay makes the mailbox legible to an agent—without making it available.</figcaption>
       </figure>
     </section>
 
-    <div id="boundary" class="shell"><MailBoundaryDiagram /></div>
+    <RelayIsometricDiagram />
 
-    <section class="feature-band shell" aria-labelledby="features-title">
-      <div class="feature-intro" data-reveal><p class="eyebrow"><span class="eyebrow-mark"></span> THE CONTROL PLANE</p><h2 id="features-title">A mailbox view shaped by <em>policy,</em> not trust.</h2></div>
+    <section id="comparison" class="comparison-section"><div class="shell"><MailBoundaryDiagram /></div></section>
+
+    <section id="policy-engine" class="feature-band shell" aria-labelledby="features-title">
+      <div class="feature-intro" data-reveal><p class="eyebrow eyebrow--pill">POLICY ENGINE</p><h2 id="features-title">A mailbox view shaped by <em>policy,</em> not trust.</h2></div>
       <div class="feature-grid">
         <article data-reveal><span>01</span><h3>Folders disappear</h3><p>Unapproved folders never become part of the agent’s mailbox view or virtual IDs.</p></article>
         <article data-reveal><span>02</span><h3>Senders are checked</h3><p>An allowed recipient cannot make an unapproved <code>From</code> sender visible.</p></article>
@@ -56,7 +60,7 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
       </div>
     </section>
 
-    <section class="security-band shell" aria-labelledby="security-title" data-reveal>
+    <section id="architecture" class="security-band shell" aria-labelledby="security-title" data-reveal>
       <div class="security-copy"><p class="eyebrow">THE CREDENTIAL STAYS WITH THE OWNER</p><h2 id="security-title">An MCP tool call.<br /><em>Not a mailbox login.</em></h2><p>The agent sends a bearer token to SirenoRELAY’s MCP endpoint. SirenoRELAY—not the agent—loads the IMAP/SMTP credentials, talks to the mail server, applies policy, and returns only the allowed result.</p></div>
       <div class="security-stack" role="group" aria-label="Credential boundary flow">
         <div><b>Agent</b><small>MCP tool call + scoped bearer token</small></div><i>→</i>
@@ -66,7 +70,7 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
       <p class="security-deploy">Run it under a dedicated OS service user or in an isolated container the agent cannot inspect. Do not give the agent access to the config, secret files, process environment, or a direct upstream route. <a href={withBase("/docs/security")}>Read the security model →</a></p>
     </section>
 
-    <section class="install-section shell" aria-labelledby="install-title" data-reveal>
+    <section id="install" class="install-section shell" aria-labelledby="install-title" data-reveal>
       <div class="install-heading"><p class="eyebrow"><span class="eyebrow-mark"></span> OWNER OPERATED</p><h2 id="install-title">Start with a key.<br />Not a compromise.</h2><p>Install the relay in the owner-controlled environment. The agent gets a scoped token—not a way into the mailbox.</p></div>
       <div class="install-card">
         <div class="install-card-top"><span>01 / INSTALL</span><span>MACOS · LINUX</span></div>
@@ -74,18 +78,18 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
         <code><small>$</small> brew install sergiocarracedo/tap/sirenorelay</code>
         <div class="install-rule"></div>
         <p><b>Agent-guided setup</b> <span>Install the skill, then ask your agent to use it.</span></p>
-        <button type="button" data-copy-prompt>Copy agent setup prompt <span aria-hidden="true">↗</span></button>
+        <Button variant="compact" data-copy-prompt>Copy agent setup prompt <span aria-hidden="true">↗</span></Button>
         <span class="copy-status" role="status" aria-live="polite" data-copy-status></span>
         <details><summary>Preview the owner-safe prompt</summary><pre data-setup-prompt>{setupPrompt}</pre></details>
       </div>
     </section>
 
-    <section class="docs-cta shell" data-reveal>
-      <div><p class="eyebrow">OWNER-OPERATED</p><h2>Configure the boundary.<br />Then hand over one token.</h2></div>
-      <div><p>Start with interactive onboarding, inspect the policy model, and keep upstream credentials outside the agent’s reach.</p><a class="button button--solid" href={withBase("/docs")}>Read the docs <span>→</span></a></div>
+    <section id="security" class="docs-cta shell" data-reveal>
+       <div><p class="eyebrow">OWNER-OPERATED</p><h2>Configure the boundary.<br />Then hand over one token.</h2></div>
+       <div><p>Start with interactive onboarding, inspect the policy model, and keep upstream credentials outside the agent’s reach.</p><Button href={withBase("/docs")}>Read the docs <span>→</span></Button></div>
     </section>
   </main>
-  <footer class="site-footer shell"><span>SirenoRELAY</span><span>Default deny, by design.</span><span>v{version}</span></footer>
+  <SiteFooter />
   <script>
     const copyButton = document.querySelector<HTMLButtonElement>("[data-copy-prompt]");
     copyButton?.addEventListener("click", async () => {

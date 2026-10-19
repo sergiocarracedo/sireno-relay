@@ -107,3 +107,5 @@ service or macOS launchd service—no `sudo` required. Do not bind to
 non-loopback addresses in v1.
 
 See `docs/configuration.md`, `docs/policy.md`, `docs/security.md`, and `docs/operations.md` for details.
+
+The published documentation also includes a [getting-started guide](docs/public/getting-started.md) covering foreground CLI, owner-scoped service, and Docker deployments. The repository `Dockerfile` packages SirenoRELAY with Himalaya; its container guide keeps the MCP listener loopback-only and configuration out of agent containers.

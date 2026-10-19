@@ -1,0 +1,65 @@
+---
+import BrandLink from "./BrandLink.astro";
+import { withBase } from "../lib/with-base";
+
+const { home = false } = Astro.props;
+const section = (id: string) => home ? `#${id}` : withBase(`/#${id}`);
+---
+
+<header class="site-header">
+  <div class="shell site-header__inner">
+    <BrandLink />
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-navigation">
+      <span class="sr-only">Toggle navigation</span><span aria-hidden="true">Menu</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+    </button>
+    <nav id="site-navigation" class="site-nav" aria-label="Main navigation">
+      <a href={withBase("/docs")}>Docs</a>
+      <a href={section("architecture")}>Architecture</a>
+      <a href={section("policy-engine")}>Policy Engine</a>
+      <a href={section("security")}>Security</a>
+      <a class="nav-github" href="https://github.com/sergiocarracedo/sireno-relay">GitHub <span aria-hidden="true">↗</span></a>
+      <a class="nav-start" href={section("install")}>Get started <span aria-hidden="true">→</span></a>
+      <button class="theme-toggle" type="button" aria-label="Switch color theme">
+        <svg class="theme-icon theme-icon--light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="theme-icon theme-icon--dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 15.6A8.8 8.8 0 0 1 8.4 3.4 8.8 8.8 0 1 0 20.6 15.6Z"/></svg>
+        <span class="sr-only">Switch color theme</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<script>
+  const header = document.querySelector<HTMLElement>(".site-header");
+  const toggle = header?.querySelector<HTMLButtonElement>(".nav-toggle");
+  const nav = header?.querySelector<HTMLElement>(".site-nav");
+  const themeToggle = header?.querySelector<HTMLButtonElement>(".theme-toggle");
+  const schemeMeta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
+  const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+  toggle?.addEventListener("click", () => {
+    const isOpen = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!isOpen));
+    nav?.toggleAttribute("data-open", !isOpen);
+  });
+
+  const updateThemeLabel = () => {
+    const stored = localStorage.getItem("color-scheme");
+    const current = stored ?? (systemDark.matches ? "dark" : "light");
+    themeToggle?.setAttribute("aria-label", `Switch to ${current === "dark" ? "light" : "dark"} theme`);
+  };
+  themeToggle?.addEventListener("click", () => {
+    const stored = localStorage.getItem("color-scheme");
+    const current = stored ?? (systemDark.matches ? "dark" : "light");
+    const next = current === "dark" ? "light" : "dark";
+    const value = next === (systemDark.matches ? "dark" : "light") ? null : next;
+    if (value) localStorage.setItem("color-scheme", value);
+    else localStorage.removeItem("color-scheme");
+    if (schemeMeta) schemeMeta.content = value ?? "light dark";
+    updateThemeLabel();
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key === "color-scheme" && schemeMeta) schemeMeta.content = event.newValue ?? "light dark";
+    updateThemeLabel();
+  });
+  updateThemeLabel();
+</script>

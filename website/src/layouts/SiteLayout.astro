@@ -10,6 +10,10 @@ const { title = "SirenoRELAY", description = "Policy-filtered email access for a
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
+    <link rel="icon" href="/sireno-relay/favicon.ico" sizes="any" />
+    <link rel="icon" href="/sireno-relay/favicon.png" type="image/png" />
+    <meta name="color-scheme" content="light dark" />
+    <script is:inline>try { document.querySelector('meta[name="color-scheme"]').content = localStorage.getItem("color-scheme") || "light dark"; } catch {}</script>
     <title>{title}</title>
   </head>
   <body>
