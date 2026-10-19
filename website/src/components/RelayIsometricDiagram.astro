@@ -1,44 +1,87 @@
-<section class="relay-map" aria-labelledby="relay-map-title" data-reveal>
-  <div class="shell">
-    <header class="relay-map__heading">
-      <p class="eyebrow eyebrow--pill">THE ACCESS BOUNDARY</p>
-      <h2 id="relay-map-title">One mailbox. <em>Two very different</em> routes.</h2>
-      <p>Direct mailbox access gives an agent broad upstream authority. SirenoRELAY accepts a separate bearer token, applies current policy, and returns only permitted results.</p>
-    </header>
+---
+import { withBase } from "../lib/with-base";
+---
 
-    <figure class="relay-map__stage" aria-describedby="relay-map-caption">
+<section class="relay-map" aria-label="Direct mailbox access and protected relay access diagram" data-reveal>
+  <div class="shell">
+    <figure class="relay-map__stage">
       <div class="relay-route relay-route--direct">
         <div class="route-label"><span class="route-label__dot"></span><b>Direct mailbox access</b><small>Agent holds upstream credentials</small></div>
-        <div class="iso-scene" aria-hidden="true">
-          <div class="iso-platform iso-platform--risk"></div>
-          <div class="iso-object iso-agent iso-agent--risk"><span>AI</span><i></i><i></i><i></i></div>
-          <div class="iso-object iso-mailbox iso-mailbox--risk"><span>MAIL</span><i></i><i></i></div>
-          <div class="iso-flow iso-flow--risk"><i class="packet packet--credentials">credentials</i><i class="packet packet--mail">all folders</i><i class="packet packet--attachment">attachments</i></div>
-          <div class="iso-caption iso-caption--agent">AUTONOMOUS<br />AGENT</div>
-          <div class="iso-caption iso-caption--mail">UPSTREAM<br />MAILBOX</div>
-          <div class="iso-warning">Unrestricted connection</div>
+        <div class="iso-scene iso-scene--risk" aria-hidden="true">
+          <span class="iso-scene__badge">NO POLICY BOUNDARY</span>
+          <div class="iso-world">
+            <div class="iso-deck">
+              <div class="iso-deck__top"></div><div class="iso-deck__front"></div><div class="iso-deck__side"></div>
+            </div>
+            <div class="iso-link iso-link--risk">
+              <span class="iso-chip iso-chip--risk iso-chip--first">credentials</span>
+              <span class="iso-chip iso-chip--risk iso-chip--second">all folders</span>
+              <span class="iso-chip iso-chip--risk iso-chip--third">raw messages</span>
+            </div>
+            <div class="iso-machine iso-machine--agent">
+              <div class="iso-machine__top"><span class="iso-machine__glyph">AI</span><span class="iso-machine__trace"></span></div>
+              <div class="iso-machine__front"></div><div class="iso-machine__side"></div><div class="iso-machine__left"></div>
+            </div>
+            <div class="iso-machine iso-machine--mail">
+              <div class="iso-machine__top"><span class="iso-machine__glyph">MAIL</span><span class="iso-machine__trace"></span></div>
+              <div class="iso-machine__front"></div><div class="iso-machine__side"></div><div class="iso-machine__left"></div>
+            </div>
+          </div>
+          <div class="iso-scene__outcomes">
+            <div class="iso-outcome">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6.5h7l2 2h10v10h-19z"/></svg>
+              <span>Personal folder <strong>EXPOSED</strong></span>
+            </div>
+            <div class="iso-outcome">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>
+              <span>Newsletter email <strong>EXPOSED</strong></span>
+            </div>
+          </div>
+          <div class="iso-scene__legend"><span>AI AGENT</span><span>DIRECT CONNECTION</span><span>MAIL SERVER</span></div>
         </div>
         <p class="route-copy">The agent can use the mailbox credential directly. Folder and sender policy is not applied at the relay boundary, and sends bypass relay recipient checks.</p>
       </div>
 
       <div class="relay-route relay-route--protected">
         <div class="route-label"><span class="route-label__dot"></span><b>Protected relay gateway</b><small>Scoped bearer token + current policy</small></div>
-        <div class="iso-scene" aria-hidden="true">
-          <div class="iso-platform iso-platform--safe"></div>
-          <div class="iso-object iso-agent iso-agent--safe"><span>AI</span><i></i><i></i><i></i></div>
-          <div class="iso-object iso-gate"><span>Sireno</span><strong>RELAY</strong><i>policy</i></div>
-          <div class="iso-object iso-mailbox iso-mailbox--safe"><span>MAIL</span><i></i><i></i></div>
-          <div class="iso-flow iso-flow--token"><i class="packet packet--token">bearer token</i></div>
-          <div class="iso-flow iso-flow--allowed"><i class="packet packet--allowed">allowed mail</i><i class="packet packet--allowed packet--two">filtered result</i></div>
-          <div class="iso-flow iso-flow--blocked"><i class="packet packet--blocked">denied</i></div>
-          <div class="iso-caption iso-caption--agent">AGENT</div>
-          <div class="iso-caption iso-caption--gate">TOKEN + POLICY<br />CHECKPOINT</div>
-          <div class="iso-caption iso-caption--mail">OWNER-CONTROLLED<br />MAILBOX</div>
-          <div class="iso-warning iso-warning--safe">Credentials stay with the relay</div>
+        <div class="iso-scene iso-scene--safe" aria-hidden="true">
+          <span class="iso-scene__badge">CREDENTIALS STAY WITH THE RELAY</span>
+          <div class="iso-world">
+            <div class="iso-deck">
+              <div class="iso-deck__top"></div><div class="iso-deck__front"></div><div class="iso-deck__side"></div>
+            </div>
+            <div class="iso-link iso-link--token"><span class="iso-chip iso-chip--token">bearer token</span></div>
+            <div class="iso-link iso-link--upstream"><span class="iso-chip iso-chip--upstream">authorized request</span></div>
+            <div class="iso-link iso-link--return"><span class="iso-chip iso-chip--return">allowed results</span></div>
+            <div class="iso-link iso-link--rejected"><span class="iso-chip iso-chip--rejected">blocked</span></div>
+            <div class="iso-stop-marker"><span>×</span><b>stopped<br />in relay</b></div>
+            <div class="iso-machine iso-machine--agent">
+              <div class="iso-machine__top"><span class="iso-machine__glyph">AI</span><span class="iso-machine__trace"></span></div>
+              <div class="iso-machine__front"></div><div class="iso-machine__side"></div><div class="iso-machine__left"></div>
+            </div>
+            <div class="iso-machine iso-machine--gateway">
+              <div class="iso-machine__top"><span class="iso-machine__glyph"><img src={withBase("/logo.png")} width="52" height="52" alt="" /></span><span class="iso-machine__trace"></span></div>
+              <div class="iso-machine__front"></div><div class="iso-machine__side"></div><div class="iso-machine__left"></div>
+            </div>
+            <div class="iso-machine iso-machine--mail">
+              <div class="iso-machine__top"><span class="iso-machine__glyph">MAIL</span><span class="iso-machine__trace"></span></div>
+              <div class="iso-machine__front"></div><div class="iso-machine__side"></div><div class="iso-machine__left"></div>
+            </div>
+          </div>
+          <div class="iso-scene__outcomes">
+            <div class="iso-outcome">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6.5h7l2 2h10v10h-19z"/></svg>
+              <span>Personal folder <strong>BLOCKED</strong></span>
+            </div>
+            <div class="iso-outcome">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>
+              <span>Newsletter email <strong>BLOCKED</strong></span>
+            </div>
+          </div>
+          <div class="iso-scene__legend"><span>AI AGENT</span><span>TOKEN + POLICY</span><span>MAIL SERVER</span></div>
         </div>
         <p class="route-copy">SirenoRELAY owns upstream credentials, authenticates the agent token, filters folders and messages, and checks outbound recipients before handoff.</p>
       </div>
-      <figcaption id="relay-map-caption">The animation is a simplified request path. SirenoRELAY is not a sandbox for an agent that can access the relay host, configuration, or upstream mail server directly.</figcaption>
     </figure>
   </div>
 </section>
