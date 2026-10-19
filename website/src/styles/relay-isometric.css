@@ -141,7 +141,7 @@
 .iso-outcome { display: flex; align-items: center; gap: 9px; min-width: 0; border: 1px solid #e79743; border-radius: 8px; padding: 9px 10px; background: linear-gradient(120deg, #51301d, #35231a); color: #fff3d6; box-shadow: inset 0 0 0 1px rgb(255 190 82 / .1); font: 500 .64rem/1.3 "JetBrains Mono", monospace; }
 .iso-outcome svg { flex: none; width: 20px; height: 20px; fill: none; stroke: #ffc655; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
 .iso-outcome span { min-width: 0; }.iso-outcome strong { display: block; margin-top: 2px; color: #ffc655; font-size: .58rem; letter-spacing: .06em; }
-.iso-scene--safe .iso-outcome { border-color: rgb(255 174 138 / .65); background: rgb(48 27 25 / .95); }
+.iso-scene--safe .iso-outcome { border-color: #50dca8; background: linear-gradient(120deg, #163b30, #102a23); box-shadow: inset 0 0 0 1px rgb(104 238 184 / .12); color: #e5fff2; }.iso-scene--safe .iso-outcome svg { stroke: #8af1c7; }.iso-scene--safe .iso-outcome strong { color: #8af1c7; }
 .iso-scene__legend { position: absolute; right: 22px; bottom: 18px; left: 22px; display: flex; justify-content: space-between; gap: 8px; color: #d1ecdd; font: 600 .58rem "JetBrains Mono", monospace; text-align: center; }
 .iso-scene__legend span:first-child { text-align: left; }
 .iso-scene__legend span:last-child { text-align: right; }
