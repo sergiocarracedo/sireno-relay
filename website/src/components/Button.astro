@@ -1,0 +1,5 @@
+---
+const { href, variant = "primary", class: className = "", type = "button", ...attributes } = Astro.props;
+---
+
+{href ? <a class:list={["button", `button--${variant}`, className]} href={href} {...attributes}><slot /></a> : <button class:list={["button", `button--${variant}`, className]} type={type} {...attributes}><slot /></button>}

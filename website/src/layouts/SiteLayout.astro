@@ -1,0 +1,32 @@
+---
+import "../styles/site.css";
+
+const { title = "SirenoRELAY", description = "Policy-filtered email access for agents." } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <link rel="icon" href="/sireno-relay/favicon.ico" sizes="any" />
+    <link rel="icon" href="/sireno-relay/favicon.png" type="image/png" />
+    <meta name="color-scheme" content="light dark" />
+    <script is:inline>try { document.querySelector('meta[name="color-scheme"]').content = localStorage.getItem("color-scheme") || "light dark"; } catch {}</script>
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+    <script>
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        document.documentElement.classList.add("reveal-ready");
+        const observer = new IntersectionObserver(
+          (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add("is-revealed")),
+          { threshold: 0.12 },
+        );
+        document.querySelectorAll("[data-reveal]").forEach((element) => observer.observe(element));
+      }
+    </script>
+  </body>
+</html>

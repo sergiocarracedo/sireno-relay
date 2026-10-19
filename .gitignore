@@ -4,3 +4,9 @@ sireno-state.json
 
 # Local build output.
 bin/
+dist/
+
+# Website development and generated output.
+website/node_modules/
+website/.astro/
+website/dist/
