@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.0.0...v1.1.0) (2026-10-20)
+
+
+### Features
+
+* refine animated homepage hero ([3930f68](https://github.com/sergiocarracedo/sireno-relay/commit/3930f6838a5fa83f5cba585395cfde699bdd34e3))
+
+
+### Bug Fixes
+
+* clarify protected email example ([d6c41f8](https://github.com/sergiocarracedo/sireno-relay/commit/d6c41f8bf97fd6b45367c3b26a5aa21a60d6bdde))
+* distinguish protected blocked outcomes ([69f6406](https://github.com/sergiocarracedo/sireno-relay/commit/69f640699a8f9bd9c56f83e27946b9a15f67728f))
+* improve feature badge contrast in dark mode ([4143fe8](https://github.com/sergiocarracedo/sireno-relay/commit/4143fe8a6f68e375ca51433981bd28e600005f78))
+
 ## 1.0.0 (2026-10-19)
 
 
