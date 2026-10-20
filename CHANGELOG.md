@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.1.0...v1.2.0) (2026-10-20)
+
+
+### Features
+
+* animate homepage hero entrance ([3ed3704](https://github.com/sergiocarracedo/sireno-relay/commit/3ed37041604886183c6038607032e2c418447c3a))
+* animate homepage hero entrance ([4a012b4](https://github.com/sergiocarracedo/sireno-relay/commit/4a012b4a8ffc3286553e4e2d701d7e160279696e))
+
 ## [1.1.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.0.0...v1.1.0) (2026-10-20)
 
 
