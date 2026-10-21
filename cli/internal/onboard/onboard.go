@@ -66,7 +66,18 @@ func Run(ctx context.Context, options Options) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		spinner, spinnerErr := pterm.DefaultSpinner.WithWriter(options.Output).Start("Checking connection")
+		if spinnerErr == nil {
+			spinner.UpdateText("Loading IMAP folders")
+		}
 		folders, err = options.ListFolders(ctx, accountWithSecrets(account, imapPassword, smtpPassword))
+		if spinnerErr == nil {
+			if err == nil && len(folders) > 0 {
+				spinner.Success(fmt.Sprintf("Loaded %d IMAP folders", len(folders)))
+			} else {
+				spinner.Fail("Could not load IMAP folders")
+			}
+		}
 		if err == nil && len(folders) > 0 {
 			break
 		}
@@ -149,7 +160,7 @@ func accountWithSecretCommands(account config.Provider, imap, smtp string) confi
 }
 
 func selectFolders(folders []string) ([]string, error) {
-	return pterm.DefaultInteractiveMultiselect.WithOptions(folders).WithFilter(false).WithKeyConfirm(keys.Enter).WithKeySelect(keys.Space).Show()
+	return pterm.DefaultInteractiveMultiselect.WithOptions(folders).WithMaxHeight(12).WithFilter(false).WithKeyConfirm(keys.Enter).WithKeySelect(keys.Space).Show()
 }
 
 // PromptText matches the interactive text-entry behavior used by
