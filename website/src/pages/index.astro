@@ -1,5 +1,6 @@
 ---
 import Button from "../components/Button.astro";
+import GitHubStarButton from "../components/GitHubStarButton.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import MailBoundaryDiagram from "../components/MailBoundaryDiagram.astro";
@@ -22,6 +23,7 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
           <h1>Email access, <em>on your terms.</em></h1>
           <p class="lede">A policy boundary between your mailbox and an agent. It lets the useful mail through—and keeps the rest, including your credentials, where it belongs.</p>
           <div class="hero-actions"><Button href="#install">Getting started <span>→</span></Button><Button href="#comparison" variant="secondary">Watch it work <span>↓</span></Button></div>
+          <GitHubStarButton />
         </div>
       </div>
     </section>
