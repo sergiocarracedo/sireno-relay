@@ -1,0 +1,34 @@
+---
+const repository = "https://github.com/sergiocarracedo/sireno-relay";
+const api = "https://api.github.com/repos/sergiocarracedo/sireno-relay";
+---
+
+<a class="github-stars" href={repository} target="_blank" rel="noreferrer" data-github-stars-url={api}>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.648.5.5 5.648.5 12c0 5.084 3.292 9.398 7.86 10.92.575.106.785-.25.785-.555 0-.273-.01-.996-.016-1.955-3.197.694-3.872-1.54-3.872-1.54-.523-1.328-1.277-1.681-1.277-1.681-1.044-.714.079-.699.079-.699 1.155.08 1.763 1.186 1.763 1.186 1.026 1.758 2.691 1.25 3.347.956.104-.743.401-1.25.73-1.538-2.552-.29-5.236-1.276-5.236-5.682 0-1.255.448-2.28 1.183-3.084-.119-.29-.512-1.457.112-3.038 0 0 .964-.309 3.159 1.178A10.97 10.97 0 0 1 12 5.76c.973.004 1.953.132 2.87.388 2.194-1.487 3.157-1.178 3.157-1.178.626 1.581.233 2.748.114 3.038.737.804 1.181 1.829 1.181 3.084 0 4.417-2.688 5.388-5.248 5.672.412.355.78 1.055.78 2.126 0 1.535-.014 2.773-.014 3.15 0 .308.207.667.79.554C20.211 21.394 23.5 17.083 23.5 12 23.5 5.648 18.352.5 12 .5Z" /></svg>
+  <span>Star on GitHub</span>
+  <span class="github-stars__count"><span aria-hidden="true">★</span><strong data-github-star-count>1</strong></span>
+</a>
+
+<script>
+  const button = document.querySelector<HTMLAnchorElement>("[data-github-stars-url]");
+  const count = document.querySelector<HTMLElement>("[data-github-star-count]");
+
+  if (button?.dataset.githubStarsUrl && count) {
+    fetch(button.dataset.githubStarsUrl, { headers: { Accept: "application/vnd.github+json" } })
+      .then((response) => response.ok ? response.json() as Promise<{ stargazers_count?: number }> : Promise.reject())
+      .then(({ stargazers_count }) => {
+        if (typeof stargazers_count === "number") {
+          count.textContent = new Intl.NumberFormat("en", { notation: stargazers_count >= 1000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(stargazers_count);
+        }
+      })
+      .catch(() => {});
+  }
+</script>
+
+<style>
+  .github-stars { display: inline-flex; align-items: center; gap: .55rem; margin-top: 1.1rem; border: 1px solid var(--line); border-radius: 999px; padding: .38rem .45rem .38rem .7rem; background: color-mix(in srgb, var(--surface) 74%, transparent); color: var(--ink); font-size: .82rem; font-weight: 600; text-decoration: none; transition: border-color .2s, background-color .2s, transform .2s; }
+  .github-stars:hover { border-color: var(--moss); background: var(--surface); transform: translateY(-1px); }
+  .github-stars > svg { width: 1rem; height: 1rem; fill: currentColor; }
+  .github-stars__count { display: inline-flex; align-items: center; gap: .25rem; border-radius: 999px; padding: .18rem .48rem; background: color-mix(in srgb, var(--lime) 25%, var(--surface)); color: var(--moss); font-size: .76rem; }
+  .github-stars__count > span { color: #bd9900; }
+</style>
