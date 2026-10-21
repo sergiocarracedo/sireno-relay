@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.1](https://github.com/sergiocarracedo/sireno-relay/compare/v1.3.0...v1.3.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **website:** prevent hero animation overflow ([85fa1f6](https://github.com/sergiocarracedo/sireno-relay/commit/85fa1f6448066609990694c179d96b0852decddf))
+* **website:** read version from release manifest ([1771da9](https://github.com/sergiocarracedo/sireno-relay/commit/1771da94e0a13a643bf88e40c01ab900e2d2607f))
+* **website:** show release version without hero overflow ([b3ca0ea](https://github.com/sergiocarracedo/sireno-relay/commit/b3ca0ea80baceaeeda7e31631f0fff6caa69e1b1))
+
 ## [1.3.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.2.0...v1.3.0) (2026-10-21)
 
 
