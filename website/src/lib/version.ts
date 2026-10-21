@@ -1,1 +1,3 @@
-export const version = import.meta.env.PUBLIC_CLI_VERSION?.trim() || "development";
+import releaseManifest from "../../../.release-please-manifest.json";
+
+export const version = releaseManifest["."];
