@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.2.0...v1.3.0) (2026-10-21)
+
+
+### Features
+
+* improve onboarding and website trust signals ([234ba17](https://github.com/sergiocarracedo/sireno-relay/commit/234ba17d7f686a3a75c0e16c241b8dbf7679f030))
+* **onboard:** show IMAP folder loading progress ([d4bbd07](https://github.com/sergiocarracedo/sireno-relay/commit/d4bbd07801f0bd4a80ed7e46b6e8f24f88534c6e))
+* **website:** add GitHub star counter ([d6ff0a4](https://github.com/sergiocarracedo/sireno-relay/commit/d6ff0a4a29432da0fc03e036969a4e1f4ff9bb9c))
+
 ## [1.2.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.1.0...v1.2.0) (2026-10-20)
 
 
