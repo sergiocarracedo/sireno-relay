@@ -48,7 +48,8 @@ func TestRunRetriesProviderCredentialsAfterFolderFailure(t *testing.T) {
 	input := strings.NewReader("bad@example.org\nimap.bad:993\n\nsmtp.bad:465\n\nyes\ngood@example.org\nimap.good:993\n\nsmtp.good:465\n\n\n\n\n")
 	secrets := []string{"bad-imap", "bad-smtp", "good-imap", "good-smtp"}
 	var attempts int
-	_, err := Run(context.Background(), Options{ConfigPath: filepath.Join(dir, "sireno", "config.yml"), MarkerPath: filepath.Join(dir, "sireno", "onboard"), Input: input, Output: &bytes.Buffer{}, ReadSecret: func(string) (string, error) { value := secrets[0]; secrets = secrets[1:]; return value, nil }, ListFolders: func(_ context.Context, account config.Provider) ([]string, error) {
+	var output bytes.Buffer
+	_, err := Run(context.Background(), Options{ConfigPath: filepath.Join(dir, "sireno", "config.yml"), MarkerPath: filepath.Join(dir, "sireno", "onboard"), Input: input, Output: &output, ReadSecret: func(string) (string, error) { value := secrets[0]; secrets = secrets[1:]; return value, nil }, ListFolders: func(_ context.Context, account config.Provider) ([]string, error) {
 		attempts++
 		if attempts == 1 {
 			return nil, os.ErrNotExist
@@ -60,6 +61,9 @@ func TestRunRetriesProviderCredentialsAfterFolderFailure(t *testing.T) {
 	}, SelectFolders: func(folders []string) ([]string, error) { return folders, nil }})
 	if err != nil || attempts != 2 {
 		t.Fatalf("err=%v attempts=%d", err, attempts)
+	}
+	if !strings.Contains(output.String(), "Could not load IMAP folders: file does not exist") {
+		t.Fatalf("missing folder error: %q", output.String())
 	}
 }
 

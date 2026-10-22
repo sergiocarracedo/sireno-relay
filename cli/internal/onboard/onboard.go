@@ -81,7 +81,11 @@ func Run(ctx context.Context, options Options) (string, error) {
 		if err == nil && len(folders) > 0 {
 			break
 		}
-		fmt.Fprintln(options.Output, "Could not connect or the account has no folders.")
+		if err != nil {
+			fmt.Fprintf(options.Output, "Could not load IMAP folders: %v\n", err)
+		} else {
+			fmt.Fprintln(options.Output, "Connected to IMAP, but no folders were returned.")
+		}
 		retry, promptErr := prompt.text("Edit provider credentials and try again? Type yes to continue", "yes")
 		if promptErr != nil {
 			return "", promptErr

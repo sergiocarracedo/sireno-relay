@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,10 +30,13 @@ func (execRunner) Run(ctx context.Context, stdin []byte, args ...string) ([]byte
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "himalaya", args...)
 	cmd.Stdin = bytes.NewReader(stdin)
-	cmd.Stderr = io.Discard
-	var output limitedBuffer
+	var output, stderr limitedBuffer
 	cmd.Stdout = &output
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		if detail := strings.TrimSpace(stderr.String()); detail != "" {
+			return nil, fmt.Errorf("himalaya command failed: %s", detail)
+		}
 		return nil, errors.New("himalaya command failed")
 	}
 	return output.Bytes(), nil
@@ -217,9 +219,19 @@ func (h Himalaya) run(ctx context.Context, account config.Provider, stdin []byte
 	base := []string{"--config", path, "--account", "sireno", "--log-level", "off"}
 	output, err := h.runner().Run(ctx, stdin, append(base, args...)...)
 	if err != nil {
-		return nil, errors.New("himalaya command failed")
+		return nil, redactProviderError(err, account)
 	}
 	return output, nil
+}
+
+func redactProviderError(err error, account config.Provider) error {
+	message := err.Error()
+	for _, secret := range []string{account.IMAP.Password.Value, account.SMTP.Password.Value} {
+		if secret != "" {
+			message = strings.ReplaceAll(message, secret, "[redacted]")
+		}
+	}
+	return errors.New(message)
 }
 
 func jsonID(value json.RawMessage) (string, error) {
