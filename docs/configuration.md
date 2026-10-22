@@ -130,7 +130,9 @@ SirenoRELAY accepts bounded multipart mail with UTF-8/ASCII plain text or HTML c
 
 `attachments.mode` controls a policy-denied attachment. `reject` hides the entire inbound email and rejects the entire outbound submission. `remove` removes the attachment and adds the fixed text `[One or more attachments were removed by Sireno security policy.]` to the visible or submitted body. `silent-remove` removes it without adding text. Omit the field to use `remove`.
 
-Inbound message results include virtual attachment IDs and a relative `download_url`. Resolve it against the MCP endpoint and fetch it with the same `Authorization: Bearer <token>` header. SirenoRELAY rechecks the bearer token, message visibility, MIME policy, and virtual IDs for each download; it never places the bearer token in a URL. Attachment names and untrusted metadata are not exposed.
+Inbound message results include virtual attachment IDs and a relative `download_url`. Resolve it against the MCP endpoint and fetch it with the same `Authorization: Bearer <token>` header. SirenoRELAY rechecks the bearer token, message visibility, MIME policy, and virtual IDs for each download; it never places the bearer token in a URL.
+
+`attachments.base_url` is an optional HTTP(S) origin used by `read_attachment` for allowed file formats that cannot be returned directly through MCP. It must contain only a scheme, host, and optional port—for example `http://local-sirenorelay:8081`. The tool returns a one-minute, single-use URL scoped to exactly one attachment. Treat it as a secret: it authorizes that attachment without the normal bearer header during its brief lifetime. The Home Assistant App automatically supplies its internal App hostname and MCP bridge port when this setting is absent; an explicit config value takes precedence.
 
 ## `users.<name>`
 

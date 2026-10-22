@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,11 +20,18 @@ var environmentReference = regexp.MustCompile(`\{env:([A-Za-z_][A-Za-z0-9_]*)\}`
 
 // Config is owned by the relay operator, never by an agent process.
 type Config struct {
-	Providers map[string]Provider `yaml:"providers"`
-	Profiles  map[string]Profile  `yaml:"profiles"`
-	Users     map[string]User     `yaml:"users"`
-	Listen    Listen              `yaml:"listen"`
-	Logging   Logging             `yaml:"logging"`
+	Providers   map[string]Provider `yaml:"providers"`
+	Profiles    map[string]Profile  `yaml:"profiles"`
+	Users       map[string]User     `yaml:"users"`
+	Listen      Listen              `yaml:"listen"`
+	Attachments AttachmentSettings  `yaml:"attachments"`
+	Logging     Logging             `yaml:"logging"`
+}
+
+// AttachmentSettings controls links returned for attachment types that cannot
+// be represented directly in an MCP tool result.
+type AttachmentSettings struct {
+	BaseURL string `yaml:"base_url"`
 }
 
 type Provider struct {
@@ -251,6 +259,9 @@ func uniqueKeys(node *yaml.Node) error {
 
 func (c *Config) Validate() ([]string, error) {
 	var warnings []string
+	if c.Attachments.BaseURL == "" {
+		c.Attachments.BaseURL = os.Getenv("SIRENORELAY_ATTACHMENT_BASE_URL")
+	}
 	if len(c.Providers) == 0 || len(c.Users) == 0 {
 		return nil, errors.New("at least one provider and user are required")
 	}
@@ -364,6 +375,19 @@ func (c *Config) Validate() ([]string, error) {
 		if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
 			return nil, fmt.Errorf("MCP listener %q must bind loopback", c.Listen.MCP)
 		}
+	}
+	if c.Attachments.BaseURL != "" {
+		origin, err := url.Parse(c.Attachments.BaseURL)
+		if err != nil || (origin.Scheme != "http" && origin.Scheme != "https") || origin.Host == "" || origin.User != nil || (origin.Path != "" && origin.Path != "/") || origin.RawQuery != "" || origin.Fragment != "" {
+			return nil, errors.New("attachments.base_url must be an HTTP(S) origin without credentials, path, query, or fragment")
+		}
+		if origin.Port() != "" {
+			port, err := strconv.ParseUint(origin.Port(), 10, 16)
+			if err != nil || port == 0 {
+				return nil, errors.New("attachments.base_url has an invalid port")
+			}
+		}
+		c.Attachments.BaseURL = strings.TrimSuffix(origin.String(), "/")
 	}
 	if c.Logging.Level != "" && c.Logging.Level != "error" && c.Logging.Level != "warn" && c.Logging.Level != "info" && c.Logging.Level != "debug" {
 		return nil, fmt.Errorf("invalid logging level %q", c.Logging.Level)

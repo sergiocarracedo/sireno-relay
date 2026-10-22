@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
@@ -42,6 +44,35 @@ type attachmentProvider struct{ fakeProvider }
 
 func (attachmentProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
 	return []provider.Message{{ID: "42", Generation: "1", Flags: []provider.Flag{provider.FlagSeen}, Raw: []byte("From: store@example.org\r\nTo: me@example.org\r\nCc: accounts@example.org\r\nDate: Wed, 14 Oct 2026 09:30:00 +0000\r\nSubject: Receipt\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nTotal\r\n--x\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=receipt.pdf\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQK\r\n--x--\r\n")}}, nil
+}
+
+type textAttachmentProvider struct{ fakeProvider }
+
+func (textAttachmentProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
+	return []provider.Message{{ID: "43", Generation: "1", Raw: []byte("From: store@example.org\r\nSubject: Notes\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\nBody\r\n--x\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=notes.txt\r\n\r\nconfidential notes\r\n--x--\r\n")}}, nil
+}
+
+type imageAttachmentProvider struct{ fakeProvider }
+
+func (imageAttachmentProvider) Messages(context.Context, config.Provider, string) ([]provider.Message, error) {
+	png := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL1aQAAAABJRU5ErkJggg=="
+	return []provider.Message{{ID: "44", Generation: "1", Raw: []byte("From: store@example.org\r\nSubject: Photo\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain\r\n\r\nBody\r\n--x\r\nContent-Type: image/png\r\nContent-Disposition: attachment; filename=photo.png\r\nContent-Transfer-Encoding: base64\r\n\r\n" + png + "\r\n--x--\r\n")}}, nil
+}
+
+func (p imageAttachmentProvider) Page(ctx context.Context, account config.Provider, request provider.PageRequest) (provider.Page, error) {
+	if request.Page != 1 {
+		return provider.Page{}, nil
+	}
+	messages, err := p.Messages(ctx, account, request.Folder)
+	return provider.Page{Messages: messages}, err
+}
+
+func (p textAttachmentProvider) Page(ctx context.Context, account config.Provider, request provider.PageRequest) (provider.Page, error) {
+	if request.Page != 1 {
+		return provider.Page{}, nil
+	}
+	messages, err := p.Messages(ctx, account, request.Folder)
+	return provider.Page{Messages: messages}, err
 }
 func (p attachmentProvider) Page(ctx context.Context, account config.Provider, request provider.PageRequest) (provider.Page, error) {
 	if request.Page != 1 {
@@ -203,6 +234,101 @@ users:
 	item := listed.(map[string]any)["messages"].([]envelope)[0]
 	if len(item.From) != 1 || len(item.To) != 1 || len(item.Cc) != 1 || item.Date != "2026-10-14T09:30:00Z" || !item.Read || item.AttachmentCount != 1 || len(item.Attachments) != 1 || item.Attachments[0].Name != "receipt.pdf" {
 		t.Fatalf("list item=%#v", item)
+	}
+}
+
+func TestReadAttachmentIssuesSingleUseScopedDownloadURL(t *testing.T) {
+	digest := sha256.Sum256([]byte("test-token"))
+	path := filepath.Join(t.TempDir(), "config.yml")
+	text := fmt.Sprintf(`providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot:
+    folders: {allow: ["ro:INBOX"]}
+    inbound: {attachments: {allow: ["text/plain"]}}
+users:
+  bot: {provider: home, profile: bot, token_hash: %x}
+attachments: {base_url: "http://local-sirenorelay:8081"}
+`, digest)
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r := &relay.Relay{ConfigPath: path, Provider: textAttachmentProvider{}, Store: mustMCPStore(t)}
+	identity, err := r.AuthenticateToken("test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	capabilities := newAttachmentCapabilityStore()
+	_, structured, err := readAttachment(r, capabilities)(context.WithValue(context.Background(), identityKey{}, identity), nil, readAttachmentArgs{Folder: "INBOX", UID: 1, AttachmentID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := structured.(map[string]any)
+	downloadURL, ok := result["download_url"].(string)
+	if !ok || !strings.HasPrefix(downloadURL, "http://local-sirenorelay:8081/mcp/attachments?capability=") || strings.Contains(downloadURL, "test-token") {
+		t.Fatalf("download URL = %#v", result["download_url"])
+	}
+	request := httptest.NewRequest(http.MethodGet, downloadURL, nil)
+	response := httptest.NewRecorder()
+	serveCapabilityAttachment(r, capabilities, request.URL.Query().Get("capability"), response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "confidential notes" || response.Header().Get("Cache-Control") != "no-store" || response.Header().Get("Referrer-Policy") != "no-referrer" || response.Header().Get("Content-Disposition") == "" {
+		t.Fatalf("status=%d headers=%v body=%q", response.Code, response.Header(), response.Body.String())
+	}
+	response = httptest.NewRecorder()
+	serveCapabilityAttachment(r, capabilities, request.URL.Query().Get("capability"), response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("replayed capability status=%d", response.Code)
+	}
+}
+
+func TestReadAttachmentReturnsMCPImageContent(t *testing.T) {
+	digest := sha256.Sum256([]byte("test-token"))
+	path := filepath.Join(t.TempDir(), "config.yml")
+	text := fmt.Sprintf(`providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot:
+    folders: {allow: ["ro:INBOX"]}
+    inbound: {attachments: {allow: ["image/png"]}}
+users:
+  bot: {provider: home, profile: bot, token_hash: %x}
+`, digest)
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r := &relay.Relay{ConfigPath: path, Provider: imageAttachmentProvider{}, Store: mustMCPStore(t)}
+	identity, err := r.AuthenticateToken("test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := readAttachment(r, newAttachmentCapabilityStore())(context.WithValue(context.Background(), identityKey{}, identity), nil, readAttachmentArgs{Folder: "INBOX", UID: 1, AttachmentID: 1})
+	if err != nil || len(result.Content) != 2 {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+	image, ok := result.Content[1].(*gomcp.ImageContent)
+	if !ok || image.MIMEType != "image/png" || len(image.Data) == 0 {
+		t.Fatalf("image=%#v", result.Content[1])
+	}
+}
+
+func TestAttachmentCapabilityExpires(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	store := newAttachmentCapabilityStore()
+	store.now = func() time.Time { return now }
+	identity := &relay.Identity{Name: "bot", TokenHash: "token-hash"}
+	token, err := store.issue(identity, "INBOX", 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(attachmentCapabilityLifetime)
+	if _, ok := store.take(token); ok {
+		t.Fatal("expired capability was accepted")
 	}
 }
 
