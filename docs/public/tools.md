@@ -44,12 +44,27 @@ Upstream message identifiers are not a substitute for the returned virtual UID.
 Arguments: `folder` and one to 20 virtual `uids`. Returns the permitted
 sanitized messages. A UID must come from the current visible mailbox view.
 
+### `read_attachment`
+
+Arguments: `folder`, virtual message `uid`, and the attachment `attachment_id`
+returned by `read_message`. This tool rechecks the message and attachment policy
+before returning data. Images are returned as MCP image content for vision-capable
+clients. PDFs return bounded embedded-text pages (up to eight pages and 64 KiB).
+To inspect a scanned or visual PDF, pass `page` with `render_page: true`; the
+tool returns that page as an MCP PNG image. Rendering requires `pdftoppm`.
+
+For other allowed file types, the tool returns metadata and, when the operator
+has configured `attachments.base_url`, a one-minute, single-use absolute download
+URL. That URL is scoped to the exact attachment and must be treated as a secret.
+It does not include the agent's bearer token.
+
 ### Attachment downloads
 
-An allowed read may include attachment descriptors with a download URL. Fetch
-that URL through the authenticated MCP service; authorization and attachment
-policy are rechecked. Attachment bytes are not included directly in the normal
-message result.
+An allowed message read may include attachment descriptors with a relative
+download URL. Fetch it through the authenticated MCP service with the same bearer
+header; authorization and attachment policy are rechecked. Prefer
+`read_attachment` when the client supports MCP image content or needs a scoped
+absolute URL.
 
 ## Writes
 

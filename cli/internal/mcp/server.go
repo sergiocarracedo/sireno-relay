@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/mail"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/provider"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/relay"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/view"
@@ -35,11 +37,13 @@ func Handler(r *relay.Relay) http.Handler {
 func HandlerWithAudit(r *relay.Relay, logger *slog.Logger, captureContent bool) http.Handler {
 	server := gomcp.NewServer(&gomcp.Implementation{Name: "sireno-relay", Version: "dev"}, nil)
 	cursors := newCursorStore()
+	capabilities := newAttachmentCapabilityStore()
 	gomcp.AddTool(server, &gomcp.Tool{Name: "list_folders", Description: "List folders visible to the authenticated user"}, folders(r))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "list_messages", Description: "List a 20-message sanitized page visible in one folder"}, messagesWithCursors(r, cursors))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "search_messages", Description: "Search sanitized messages with Himalaya's supported query language"}, searchMessages(r, cursors))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "read_message", Description: "Read one sanitized visible message by virtual UID"}, readMessage(r))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "read_messages", Description: "Read up to 20 sanitized visible messages by virtual UID"}, readMessages(r))
+	gomcp.AddTool(server, &gomcp.Tool{Name: "read_attachment", Description: "Read one permitted attachment. Images and PDFs are returned through MCP; other file types receive a short-lived download URL when configured."}, readAttachment(r, capabilities))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "send_message", Description: "Send a policy-checked plain-text message without attachments"}, sendMessage(r))
 	gomcp.AddTool(server, &gomcp.Tool{Name: "update_message_flags", Description: "Add or remove safe flags on one visible writable message"}, updateMessageFlags(r))
 	inner := gomcp.NewStreamableHTTPHandler(func(*http.Request) *gomcp.Server { return server }, &gomcp.StreamableHTTPOptions{JSONResponse: true})
@@ -48,15 +52,23 @@ func HandlerWithAudit(r *relay.Relay, logger *slog.Logger, captureContent bool) 
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		identity, ok := authenticatedIdentity(r, w, req)
-		if !ok {
-			return
-		}
 		if req.URL.Path == "/mcp/attachments" {
+			if capability := req.URL.Query().Get("capability"); capability != "" {
+				serveCapabilityAttachment(r, capabilities, capability, w, req)
+				return
+			}
+			identity, ok := authenticatedIdentity(r, w, req)
+			if !ok {
+				return
+			}
 			if logger != nil {
 				logger.Info("MCP attachment download", "event", "mcp.attachment_download", "user", identity.Name, "method", req.Method, "path", req.URL.Path)
 			}
 			serveAttachment(r, identity, w, req)
+			return
+		}
+		identity, ok := authenticatedIdentity(r, w, req)
+		if !ok {
 			return
 		}
 		if req.Method != http.MethodPost {
@@ -103,8 +115,88 @@ func serveAttachment(r *relay.Relay, identity *relay.Identity, w http.ResponseWr
 		http.Error(w, "attachment unavailable", http.StatusNotFound)
 		return
 	}
+	writeAttachment(w, attachment)
+}
+
+const attachmentCapabilityLifetime = time.Minute
+const maxAttachmentCapabilities = 256
+
+type attachmentCapability struct {
+	user, binding, folder    string
+	messageUID, attachmentID uint32
+	expires                  time.Time
+}
+
+type attachmentCapabilityStore struct {
+	mu     sync.Mutex
+	values map[string]attachmentCapability
+	now    func() time.Time
+}
+
+func newAttachmentCapabilityStore() *attachmentCapabilityStore {
+	return &attachmentCapabilityStore{values: make(map[string]attachmentCapability), now: time.Now}
+}
+
+func (s *attachmentCapabilityStore) issue(identity *relay.Identity, folder string, messageUID, attachmentID uint32) (string, error) {
+	var bytes [24]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(bytes[:])
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	for value, capability := range s.values {
+		if !now.Before(capability.expires) {
+			delete(s.values, value)
+		}
+	}
+	if len(s.values) >= maxAttachmentCapabilities {
+		return "", errors.New("attachment unavailable")
+	}
+	s.values[token] = attachmentCapability{user: identity.Name, binding: bindingFingerprint(identity), folder: folder, messageUID: messageUID, attachmentID: attachmentID, expires: now.Add(attachmentCapabilityLifetime)}
+	return token, nil
+}
+
+func (s *attachmentCapabilityStore) take(token string) (attachmentCapability, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	capability, ok := s.values[token]
+	delete(s.values, token)
+	if !ok || !s.now().Before(capability.expires) {
+		return attachmentCapability{}, false
+	}
+	return capability, true
+}
+
+func serveCapabilityAttachment(r *relay.Relay, capabilities *attachmentCapabilityStore, token string, w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	capability, ok := capabilities.take(token)
+	if !ok {
+		http.Error(w, "attachment unavailable", http.StatusNotFound)
+		return
+	}
+	identity, err := r.Identity(capability.user)
+	if err != nil || bindingFingerprint(identity) != capability.binding {
+		http.Error(w, "attachment unavailable", http.StatusNotFound)
+		return
+	}
+	attachment, err := r.Attachment(req.Context(), identity, capability.folder, capability.messageUID, capability.attachmentID)
+	if err != nil {
+		http.Error(w, "attachment unavailable", http.StatusNotFound)
+		return
+	}
+	writeAttachment(w, attachment)
+}
+
+func writeAttachment(w http.ResponseWriter, attachment *mail.Attachment) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", attachment.MIMEType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": attachment.Name}))
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(attachment.Bytes)
@@ -194,6 +286,14 @@ type attachmentDescriptor struct {
 type readMessageArgs struct {
 	Folder string `json:"folder" jsonschema:"folder containing the message"`
 	UID    uint32 `json:"uid" jsonschema:"virtual UID returned by list_messages"`
+}
+
+type readAttachmentArgs struct {
+	Folder       string `json:"folder" jsonschema:"folder containing the message"`
+	UID          uint32 `json:"uid" jsonschema:"virtual UID returned by list_messages"`
+	AttachmentID uint32 `json:"attachment_id" jsonschema:"attachment ID returned by read_message"`
+	Page         uint32 `json:"page,omitempty" jsonschema:"optional PDF page number; omit to read up to the first eight pages"`
+	RenderPage   bool   `json:"render_page,omitempty" jsonschema:"return the selected PDF page as a PNG image; requires page and pdftoppm"`
 }
 
 type readMessagesArgs struct {
@@ -369,6 +469,70 @@ func readMessages(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, 
 	}
 }
 
+func readAttachment(r *relay.Relay, capabilities *attachmentCapabilityStore) func(context.Context, *gomcp.CallToolRequest, readAttachmentArgs) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, _ *gomcp.CallToolRequest, args readAttachmentArgs) (*gomcp.CallToolResult, any, error) {
+		if args.Folder == "" || args.UID == 0 || args.AttachmentID == 0 {
+			return nil, nil, errors.New("attachment unavailable")
+		}
+		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
+		if identity == nil {
+			return nil, nil, errors.New("attachment unavailable")
+		}
+		attachment, err := r.Attachment(ctx, identity, args.Folder, args.UID, args.AttachmentID)
+		if err != nil {
+			return nil, nil, errors.New("attachment unavailable")
+		}
+		metadata := map[string]any{"id": attachment.ID, "name": attachment.Name, "mime_type": attachment.MIMEType, "size": len(attachment.Bytes)}
+		switch {
+		case strings.HasPrefix(attachment.MIMEType, "image/"):
+			metadata["kind"] = "image"
+			data, err := json.Marshal(metadata)
+			if err != nil {
+				return nil, nil, errors.New("attachment unavailable")
+			}
+			return &gomcp.CallToolResult{Content: []gomcp.Content{&gomcp.TextContent{Text: string(data)}, &gomcp.ImageContent{Data: attachment.Bytes, MIMEType: attachment.MIMEType}}, StructuredContent: metadata}, metadata, nil
+		case attachment.MIMEType == "application/pdf":
+			if args.RenderPage {
+				image, err := renderPDFPage(ctx, attachment.Bytes, args.Page)
+				if err != nil {
+					return nil, nil, err
+				}
+				metadata["kind"] = "pdf_page"
+				metadata["page"] = args.Page
+				data, err := json.Marshal(metadata)
+				if err != nil {
+					return nil, nil, errors.New("attachment unavailable")
+				}
+				return &gomcp.CallToolResult{Content: []gomcp.Content{&gomcp.TextContent{Text: string(data)}, &gomcp.ImageContent{Data: image, MIMEType: "image/png"}}, StructuredContent: metadata}, metadata, nil
+			}
+			pages, truncated, err := extractPDFPages(attachment.Bytes, args.Page)
+			if err != nil {
+				return nil, nil, err
+			}
+			metadata["kind"] = "pdf"
+			metadata["pages"] = pages
+			metadata["truncated"] = truncated
+			metadata["notice"] = "PDF text is extracted from embedded text only; scanned pages are not supported by this endpoint."
+			return structuredResult(metadata)
+		default:
+			cfg, _, err := config.Load(r.ConfigPath)
+			if err != nil || cfg.Attachments.BaseURL == "" {
+				metadata["download_available"] = false
+				metadata["notice"] = "No attachment download origin is configured."
+				return structuredResult(metadata)
+			}
+			token, err := capabilities.issue(identity, args.Folder, args.UID, args.AttachmentID)
+			if err != nil {
+				return nil, nil, errors.New("attachment unavailable")
+			}
+			metadata["download_available"] = true
+			metadata["download_url"] = absoluteAttachmentURL(cfg.Attachments.BaseURL, token)
+			metadata["expires_in_seconds"] = int(attachmentCapabilityLifetime.Seconds())
+			return structuredResult(metadata)
+		}
+	}
+}
+
 func sendMessage(r *relay.Relay) func(context.Context, *gomcp.CallToolRequest, sendMessageArgs) (*gomcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *gomcp.CallToolRequest, args sendMessageArgs) (*gomcp.CallToolResult, any, error) {
 		identity, _ := ctx.Value(identityKey{}).(*relay.Identity)
@@ -458,6 +622,10 @@ func messageResult(folder string, message view.Message) messageContent {
 
 func attachmentURL(folder string, messageUID, attachmentID uint32) string {
 	return "/mcp/attachments?folder=" + url.QueryEscape(folder) + "&message_uid=" + strconv.FormatUint(uint64(messageUID), 10) + "&attachment_id=" + strconv.FormatUint(uint64(attachmentID), 10)
+}
+
+func absoluteAttachmentURL(baseURL, capability string) string {
+	return baseURL + "/mcp/attachments?capability=" + url.QueryEscape(capability)
 }
 
 func structuredResult(result map[string]any) (*gomcp.CallToolResult, any, error) {

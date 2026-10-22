@@ -62,6 +62,51 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestAttachmentBaseURLMustBeOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  bool
+	}{
+		{"http://local-sirenorelay:8081", true},
+		{"https://relay.example.test/", true},
+		{"ftp://relay.example.test", false},
+		{"https://user:password@relay.example.test", false},
+		{"https://relay.example.test/mcp", false},
+		{"https://relay.example.test?x=1", false},
+		{"https://relay.example.test#fragment", false},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			text := valid + "attachments: {base_url: " + fmt.Sprintf("%q", tc.value) + "}\n"
+			path := filepath.Join(t.TempDir(), "config.yml")
+			if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, _, err := Load(path)
+			if tc.want && err != nil {
+				t.Fatal(err)
+			}
+			if !tc.want && err == nil {
+				t.Fatal("invalid base URL was accepted")
+			}
+			if tc.want && strings.HasSuffix(tc.value, "/") && cfg.Attachments.BaseURL != strings.TrimSuffix(tc.value, "/") {
+				t.Fatalf("base URL = %q", cfg.Attachments.BaseURL)
+			}
+		})
+	}
+}
+
+func TestAttachmentBaseURLUsesEnvironmentDefault(t *testing.T) {
+	t.Setenv("SIRENORELAY_ATTACHMENT_BASE_URL", "http://local-sirenorelay:18081/")
+	path := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(path, []byte(valid), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := Load(path)
+	if err != nil || cfg.Attachments.BaseURL != "http://local-sirenorelay:18081" {
+		t.Fatalf("base URL=%q err=%v", cfg.Attachments.BaseURL, err)
+	}
+}
+
 func TestWarnBroadFolder(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{"bot": {Folders: Rules{Allow: []string{"ro:*"}}}}, Providers: map[string]Provider{"p": {Address: "me@example.org", IMAP: Server{Address: "imap:993", Username: "me", Password: Password{Command: []string{"pass"}}}, SMTP: Server{Address: "smtp:465", Username: "me", Password: Password{Command: []string{"pass"}}}}}, Users: map[string]User{"bot": {Provider: "p", Profile: "bot", TokenHash: testTokenHash}}}
 	warnings, err := cfg.Validate()
