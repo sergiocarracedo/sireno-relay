@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/sergiocarracedo/sireno-relay/compare/v1.4.0...v1.4.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **website:** deploy after release version updates ([7750f2f](https://github.com/sergiocarracedo/sireno-relay/commit/7750f2fd31fee8272395c8fee9d698ce59c43a13))
+* **website:** rebuild after release version changes ([252f48f](https://github.com/sergiocarracedo/sireno-relay/commit/252f48faf2c157eeaf858eb16e24d67841dac15c))
+
 ## [1.4.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.3.1...v1.4.0) (2026-10-22)
 
 
