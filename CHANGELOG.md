@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.3.1...v1.4.0) (2026-10-22)
+
+
+### Features
+
+* **onboard:** retain retry details and show IMAP errors ([ac99474](https://github.com/sergiocarracedo/sireno-relay/commit/ac99474a0df6d172611eed7d02d811575d5603ad))
+* **onboard:** reuse values after connection retry ([508e3a1](https://github.com/sergiocarracedo/sireno-relay/commit/508e3a1122bfe586cec1b5d6b8ba8bcad9667ea4))
+
+
+### Bug Fixes
+
+* **onboard:** show IMAP connection failures ([bd254c4](https://github.com/sergiocarracedo/sireno-relay/commit/bd254c4e66b8776b3bd735dca970b94c3ae33ca4))
+
 ## [1.3.1](https://github.com/sergiocarracedo/sireno-relay/compare/v1.3.0...v1.3.1) (2026-10-21)
 
 
