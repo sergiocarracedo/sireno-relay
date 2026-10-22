@@ -62,7 +62,7 @@ func Run(ctx context.Context, options Options) (string, error) {
 	var folders []string
 	for {
 		var err error
-		account, imapPassword, smtpPassword, err = prompt.provider(options.ReadSecret)
+		account, imapPassword, smtpPassword, err = prompt.provider(options.ReadSecret, account, imapPassword, smtpPassword)
 		if err != nil {
 			return "", err
 		}
@@ -211,32 +211,38 @@ func (p *prompter) required(label string) (string, error) {
 		p.errorf("Error: %s is required. Please try again.", strings.ToLower(label))
 	}
 }
-func (p *prompter) provider(readSecret ReadSecret) (config.Provider, string, string, error) {
-	address, err := p.email("Account email address")
+func (p *prompter) provider(readSecret ReadSecret, previous config.Provider, previousIMAPPassword, previousSMTPPassword string) (config.Provider, string, string, error) {
+	address, err := p.emailDefault("Account email address", previous.Address)
 	if err != nil {
 		return config.Provider{}, "", "", err
 	}
-	imapHost, err := p.required("IMAP host (for example imap.example.org:993)")
+	imapHost, err := p.requiredDefault("IMAP host (for example imap.example.org:993)", previous.IMAP.Address)
 	if err != nil {
 		return config.Provider{}, "", "", err
 	}
-	imapUser, err := p.text("IMAP username", address)
+	imapUser, err := p.text("IMAP username", firstNonEmpty(previous.IMAP.Username, address))
 	if err != nil {
 		return config.Provider{}, "", "", err
 	}
-	imapPassword, err := p.secret(readSecret, "IMAP password or app password")
+	imapPassword, err := p.secret(readSecret, passwordPrompt("IMAP password or app password", previousIMAPPassword), previousIMAPPassword)
 	if err != nil {
 		return config.Provider{}, "", "", err
 	}
-	smtpHost, err := p.required("SMTP host (for example smtp.example.org:465)")
+	smtpHost, err := p.requiredDefault("SMTP host (for example smtp.example.org:465)", previous.SMTP.Address)
 	if err != nil {
 		return config.Provider{}, "", "", err
 	}
-	smtpUser, err := p.text("SMTP username", address)
+	smtpUser, err := p.text("SMTP username", firstNonEmpty(previous.SMTP.Username, address))
 	if err != nil {
 		return config.Provider{}, "", "", err
 	}
-	smtpPassword, err := p.secret(readSecret, "SMTP password or app password")
+	smtpFallback := imapPassword
+	smtpLabel := "SMTP password or app password (leave blank to use IMAP password)"
+	if previousSMTPPassword != "" {
+		smtpFallback = previousSMTPPassword
+		smtpLabel = passwordPrompt("SMTP password or app password", previousSMTPPassword)
+	}
+	smtpPassword, err := p.optionalSecret(readSecret, smtpLabel, smtpFallback)
 	if err != nil {
 		return config.Provider{}, "", "", err
 	}
@@ -244,7 +250,11 @@ func (p *prompter) provider(readSecret ReadSecret) (config.Provider, string, str
 }
 
 func (p *prompter) email(label string) (string, error) {
-	previous := ""
+	return p.emailDefault(label, "")
+}
+
+func (p *prompter) emailDefault(label, fallback string) (string, error) {
+	previous := fallback
 	for {
 		value, err := p.text(label, previous)
 		if err != nil {
@@ -260,6 +270,19 @@ func (p *prompter) email(label string) (string, error) {
 		}
 		p.errorf("Error: enter a valid email address. Please try again.")
 		previous = value
+	}
+}
+
+func (p *prompter) requiredDefault(label, fallback string) (string, error) {
+	for {
+		value, err := p.text(label, fallback)
+		if err != nil {
+			return "", err
+		}
+		if value != "" {
+			return value, nil
+		}
+		p.errorf("Error: %s is required. Please try again.", strings.ToLower(label))
 	}
 }
 func (p *prompter) addresses(label string) ([]string, error) {
@@ -300,11 +323,14 @@ func (p *prompter) addresses(label string) ([]string, error) {
 	}
 }
 
-func (p *prompter) secret(readSecret ReadSecret, label string) (string, error) {
+func (p *prompter) secret(readSecret ReadSecret, label, fallback string) (string, error) {
 	for {
 		value, err := readSecret(label)
 		if err == nil && value != "" {
 			return value, nil
+		}
+		if err == nil && fallback != "" {
+			return fallback, nil
 		}
 		if err != nil {
 			p.errorf("Error: %v. Please try again.", err)
@@ -312,6 +338,31 @@ func (p *prompter) secret(readSecret ReadSecret, label string) (string, error) {
 			p.errorf("Error: a value is required. Please try again.")
 		}
 	}
+}
+
+func (p *prompter) optionalSecret(readSecret ReadSecret, label, fallback string) (string, error) {
+	value, err := readSecret(label)
+	if err != nil {
+		return "", err
+	}
+	if value == "" {
+		return fallback, nil
+	}
+	return value, nil
+}
+
+func firstNonEmpty(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+func passwordPrompt(label, previous string) string {
+	if previous == "" {
+		return label
+	}
+	return label + " (leave blank to reuse the previous password)"
 }
 
 func (p *prompter) errorf(format string, values ...any) {
