@@ -3,6 +3,7 @@ name: Publish website
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths:
       - website/**
       - .release-please-manifest.json
