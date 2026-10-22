@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.4.1...v1.5.0) (2026-10-22)
+
+
+### Features
+
+* **mcp:** let agents read attachments securely ([#21](https://github.com/sergiocarracedo/sireno-relay/issues/21)) ([9b7a0b5](https://github.com/sergiocarracedo/sireno-relay/commit/9b7a0b529fd94399c06eedd6495993dafb014096))
+
 ## [1.4.1](https://github.com/sergiocarracedo/sireno-relay/compare/v1.4.0...v1.4.1) (2026-10-22)
 
 
