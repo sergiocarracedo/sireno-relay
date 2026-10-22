@@ -231,16 +231,11 @@ func newOnboardCmd() *cobra.Command {
 }
 
 func terminalSecret(label string) (string, error) {
-	fmt.Fprintf(os.Stderr, "%s: ", label)
-	value, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Fprintln(os.Stderr)
+	value, err := pterm.DefaultInteractiveTextInput.WithMask("*").Show(label)
 	if err != nil {
 		return "", errors.New("could not read secret")
 	}
-	if len(value) == 0 {
-		return "", errors.New("secret is required")
-	}
-	return string(value), nil
+	return value, nil
 }
 
 func newUserCmd() *cobra.Command {
