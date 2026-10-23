@@ -118,18 +118,13 @@ func (r *Relay) Page(ctx context.Context, identity *Identity, folder string, pag
 // Attachment re-builds the filtered view before returning bytes, so an
 // attachment is never valid after its containing message becomes hidden.
 func (r *Relay) Attachment(ctx context.Context, identity *Identity, folder string, messageUID, attachmentID uint32) (*mail.Attachment, error) {
-	snapshot, err := r.Snapshot(ctx, identity, folder)
+	messages, err := r.Messages(ctx, identity, folder, []uint32{messageUID})
 	if err != nil {
 		return nil, errors.New("attachment unavailable")
 	}
-	for _, message := range snapshot.Messages {
-		if message.UID != messageUID {
-			continue
-		}
-		for _, attachment := range message.Mail.Attachments {
-			if attachment.ID == attachmentID {
-				return &attachment, nil
-			}
+	for _, attachment := range messages[0].Mail.Attachments {
+		if attachment.ID == attachmentID {
+			return &attachment, nil
 		}
 	}
 	return nil, errors.New("attachment unavailable")

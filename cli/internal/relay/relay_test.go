@@ -31,6 +31,22 @@ type fake struct {
 	}
 }
 
+type pagedAttachmentProvider struct{ fake }
+
+func (p *pagedAttachmentProvider) Messages(ctx context.Context, account config.Provider, folder string) ([]provider.Message, error) {
+	page, err := p.Page(ctx, account, provider.PageRequest{Folder: folder, Page: 1, PageSize: 20})
+	return page.Messages, err
+}
+
+func (p *pagedAttachmentProvider) Page(_ context.Context, _ config.Provider, request provider.PageRequest) (provider.Page, error) {
+	start := int(request.Page-1) * int(request.PageSize)
+	if start >= len(p.messages) {
+		return provider.Page{}, nil
+	}
+	end := min(start+int(request.PageSize), len(p.messages))
+	return provider.Page{Messages: p.messages[start:end], HasMore: end < len(p.messages)}, nil
+}
+
 func (*fake) Capabilities(context.Context, config.Provider) (provider.Capabilities, error) {
 	return provider.Capabilities{provider.CapacityFolders: true, provider.CapacityList: true, provider.CapacityRead: true, provider.CapacitySend: true, provider.CapacityUpdateFlags: true}, nil
 }
@@ -160,6 +176,41 @@ users:
 	}
 	if f.stored.folder != "INBOX" || f.stored.target.ID != "42" || f.stored.target.Generation != "101" || f.stored.action != provider.FlagAdd || len(f.stored.flags) != 1 || f.stored.flags[0] != provider.FlagSeen {
 		t.Fatalf("unexpected store call: %+v", f.stored)
+	}
+}
+
+func TestAttachmentResolvesVisibleMessageBeyondFirstPage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	content := fmt.Sprintf(`providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot:
+    folders: {allow: ["ro:INBOX"]}
+    inbound: {attachments: {allow: ["application/pdf"]}}
+users:
+  bot: {provider: home, profile: bot, token_hash: %s}
+`, tokenHash("agent-token"))
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := &pagedAttachmentProvider{}
+	for i := 1; i <= 25; i++ {
+		p.messages = append(p.messages, provider.Message{ID: fmt.Sprintf("%d", i), Generation: "test", Raw: []byte(fmt.Sprintf("From: store@example.org\r\nSubject: Receipt %d\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nTotal\r\n--x\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=receipt-%d.pdf\r\n\r\n%%PDF-1.4\r\n--x--\r\n", i, i))})
+	}
+	r := &Relay{ConfigPath: path, Provider: p, Store: mustStore(t)}
+	identity, err := r.AuthenticateToken("agent-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Messages(context.Background(), identity, "INBOX", []uint32{21}); err != nil {
+		t.Fatalf("message on second page unavailable: %v", err)
+	}
+	attachment, err := r.Attachment(context.Background(), identity, "INBOX", 21, 1)
+	if err != nil || attachment.Name != "receipt-21.pdf" {
+		t.Fatalf("attachment=%#v err=%v", attachment, err)
 	}
 }
 
