@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+    paths-ignore:
+      - CHANGELOG.md
+      - VERSION
+      - .release-please-manifest.json
 
 permissions:
   contents: read
