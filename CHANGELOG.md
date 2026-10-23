@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/sergiocarracedo/sireno-relay/compare/v1.6.0...v1.6.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **ci:** publish release please tags ([#29](https://github.com/sergiocarracedo/sireno-relay/issues/29)) ([10ea6d5](https://github.com/sergiocarracedo/sireno-relay/commit/10ea6d5570dda4c2c90aed090ef33b0d19a81d37))
+
 ## [1.6.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.5.1...v1.6.0) (2026-10-23)
 
 
