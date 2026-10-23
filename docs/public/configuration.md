@@ -76,7 +76,7 @@ Each named provider is a reusable upstream mailbox. A provider requires
 - `username`: upstream account login.
 - `password`: a literal string, `{env:VARIABLE}`, or a command array. Prefer an
   environment reference or secret manager. Command arrays run directly without
-  a shell, and stdout supplies the secret; never put secrets in command-line
+  a shell from the directory containing `config.yml`, and stdout supplies the secret; never put secrets in command-line
   arguments.
 
 These credentials belong to the relay operator. The agent receives only its
@@ -166,7 +166,7 @@ does not enable MCP content capture.
 
 ```sh
 sirenorelay config-check
-sirenorelay policy-check --user finance-agent --folder INBOX/Invoices
+sirenorelay policy-check --user finance-agent --live --folder INBOX/Invoices
 ```
 
 `policy-check` reports whether the folder is allowed and the number of visible

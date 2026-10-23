@@ -39,7 +39,7 @@ For an IMAP/SMTP account, use the interactive wizard in an owner terminal:
 ```sh
 sirenorelay onboard
 sirenorelay config-check
-sirenorelay policy-check --user default --folder INBOX
+sirenorelay policy-check --user default --live --folder INBOX
 ```
 
 The wizard writes `~/.config/sirenorelay/config.yml` and prints the bearer token

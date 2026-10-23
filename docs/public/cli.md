@@ -29,13 +29,36 @@ references, token hash shape, rule syntax, listener loopback binding, and
 logging options. Use it after every manual edit and before starting the relay.
 Success prints `configuration valid`; configuration errors exit non-zero.
 
-## `sirenorelay policy-check --user NAME --folder NAME [--config PATH]`
+## `sirenorelay policy-check --user NAME MODE [--config PATH]`
 
-Evaluates one configured user's access to a folder and, if allowed, reports the
-number of visible messages. It never prints message contents. Both `--user`
-and `--folder` are required. Use the exact upstream folder name and a configured
-user name. This is a read-only check, not a substitute for reviewing the full
-policy or testing sender/recipient filtering.
+Checks one configured user's policy without sending mail. Exactly one mode is
+required:
+
+```sh
+# Count real messages currently visible in an upstream folder.
+sirenorelay policy-check --user agent --live --folder INBOX
+
+# Simulate inbound and outbound messages with the same policy evaluator used at runtime.
+sirenorelay policy-check --user agent --inbound --folder INBOX \
+  --sender invoices@example.org --subject "Invoice" --body "See attachment" \
+  --attachment ./invoice.pdf
+sirenorelay policy-check --user agent --outbound --recipient vendor@example.org \
+  --subject "Reply" --body "Thanks"
+
+# Evaluate a complete RFC 822 fixture. Outbound --recipient adds envelope recipients.
+sirenorelay policy-check --user agent --inbound --folder INBOX --message sample.eml
+sirenorelay policy-check --user agent --outbound --message draft.eml --recipient vendor@example.org
+```
+
+`--live` contacts the provider, evaluates every real inbound message, and prints
+only the visible count. `--inbound` evaluates folders, senders, subject/body
+rules, scanners, link removal, and attachments. `--outbound` evaluates the
+configured provider `From` address, all envelope and declared recipients, and
+outbound content rules. Simulation attachments are repeatable file paths and
+use their extension as the declared MIME type; the evaluator still verifies the
+bytes' detected MIME type. The command never prints message or attachment
+contents, scanner output, or secrets. When an allowed message has attachments
+removed by the configured mode, it reports that removal separately.
 
 ## `sirenorelay serve [--config PATH] [--debug]`
 

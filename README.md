@@ -68,12 +68,14 @@ Link removal replaces links with `[link removed]` and does not retain their targ
 
 ```sh
 sirenorelay config-check --config config.yml
-sirenorelay policy-check --config config.yml --user hermes-agent --folder INBOX/Invoices
+sirenorelay policy-check --config config.yml --user hermes-agent --live --folder INBOX/Invoices
+sirenorelay policy-check --config config.yml --user hermes-agent --inbound --folder INBOX/Invoices --sender invoices@example.org --body "Invoice attached" --attachment invoice.pdf
+sirenorelay policy-check --config config.yml --user hermes-agent --outbound --recipient vendor@example.org --body "Thanks"
 sirenorelay serve --config config.yml
 sirenorelay user token rotate --user hermes-agent --config config.yml
 ```
 
-`policy-check` evaluates real upstream mail but prints only a visible count—not subjects or bodies. Configuration/state files are owner-only; do not run these owner commands in an agent environment.
+`policy-check --live` evaluates real upstream mail but prints only a visible count—not subjects or bodies. Its `--inbound` and `--outbound` modes simulate policy decisions from flags or a complete `--message` RFC 822 fixture. Configuration/state files are owner-only; do not run these owner commands in an agent environment.
 
 ## CLI tooling
 

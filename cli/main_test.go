@@ -140,6 +140,116 @@ func TestServeAcceptsDebugFlag(t *testing.T) {
 	}
 }
 
+func TestPolicyCheckRequiresAnExplicitMode(t *testing.T) {
+	previous := findExecutable
+	findExecutable = func(string) (string, error) { return "/usr/bin/himalaya", nil }
+	t.Cleanup(func() { findExecutable = previous })
+
+	err := run([]string{"policy-check", "--user", "bot", "--folder", "INBOX"}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "exactly one of --live, --inbound, or --outbound") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPolicyCheckSimulatesInboundAndOutboundPolicies(t *testing.T) {
+	previous := findExecutable
+	findExecutable = func(string) (string, error) { return "/usr/bin/himalaya", nil }
+	t.Cleanup(func() { findExecutable = previous })
+
+	path := filepath.Join(t.TempDir(), "config.yml")
+	config := `providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot:
+    folders: {allow: ["ro:INBOX"]}
+    inbound:
+      addresses: {allow: ["alice@example.org"]}
+      denied_subjects: ["secret*"]
+    outbound:
+      addresses: {allow: ["trusted@example.org"]}
+users:
+  bot: {provider: home, profile: bot, token_hash: d7c5c19d04e1f02b9e21d9b8014758a148fa5bb4a6c3148d66566837dc3f3b98}
+`
+	if err := os.WriteFile(path, []byte(config), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := run([]string{"policy-check", "--config", path, "--user", "bot", "--inbound", "--folder", "INBOX", "--sender", "alice@example.org", "--subject", "Invoice", "--body", "Attached"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "inbound message allowed") {
+		t.Fatalf("unexpected inbound output: %q", out.String())
+	}
+	out.Reset()
+	if err := run([]string{"policy-check", "--config", path, "--user", "bot", "--outbound", "--recipient", "trusted@example.org", "--body", "Thanks"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "outbound message allowed") {
+		t.Fatalf("unexpected outbound output: %q", out.String())
+	}
+	out.Reset()
+	if err := run([]string{"policy-check", "--config", path, "--user", "bot", "--outbound", "--recipient", "blocked@example.org", "--body", "Thanks"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "outbound address policy") {
+		t.Fatalf("unexpected denied output: %q", out.String())
+	}
+}
+
+func TestPolicyCheckEvaluatesRawMessageAndAttachments(t *testing.T) {
+	previous := findExecutable
+	findExecutable = func(string) (string, error) { return "/usr/bin/himalaya", nil }
+	t.Cleanup(func() { findExecutable = previous })
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	config := `providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot:
+    folders: {allow: ["ro:INBOX"]}
+    inbound:
+      attachments: {allow: ["text/plain"]}
+    outbound:
+      addresses: {allow: ["trusted@example.org"]}
+users:
+  bot: {provider: home, profile: bot, token_hash: d7c5c19d04e1f02b9e21d9b8014758a148fa5bb4a6c3148d66566837dc3f3b98}
+`
+	if err := os.WriteFile(path, []byte(config), 0600); err != nil {
+		t.Fatal(err)
+	}
+	attachment := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(attachment, []byte("permitted attachment"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	raw := filepath.Join(dir, "message.eml")
+	if err := os.WriteFile(raw, []byte("From: Alice <alice@example.org>\r\nTo: me@example.org\r\nSubject: Invoice\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := run([]string{"policy-check", "--config", path, "--user", "bot", "--inbound", "--folder", "INBOX", "--sender", "alice@example.org", "--attachment", attachment}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "inbound message allowed") {
+		t.Fatalf("unexpected attachment output: %q", out.String())
+	}
+	out.Reset()
+	if err := run([]string{"policy-check", "--config", path, "--user", "bot", "--inbound", "--folder", "INBOX", "--message", raw}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "inbound message allowed") {
+		t.Fatalf("unexpected raw-message output: %q", out.String())
+	}
+}
+
 func TestServiceCommandsAcceptAnOwnerConfigFlag(t *testing.T) {
 	cmd := newRootCmd(io.Discard, io.Discard)
 	service, _, err := cmd.Find([]string{"service"})
