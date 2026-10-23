@@ -49,8 +49,9 @@ type Server struct {
 // Password accepts either a scalar value (usually ${ENVIRONMENT_VARIABLE})
 // or a command argument array. Command values are never passed through a shell.
 type Password struct {
-	Value   string
-	Command []string
+	Value     string
+	Command   []string
+	Directory string `yaml:"-"` // Config directory used for relative command arguments.
 }
 
 func (p *Password) UnmarshalYAML(node *yaml.Node) error {
@@ -171,6 +172,10 @@ type MCPLog struct {
 }
 
 func Load(path string) (*Config, []string, error) {
+	commandDirectory, err := filepath.Abs(filepath.Dir(path))
+	if err != nil {
+		return nil, nil, err
+	}
 	stat, err := os.Lstat(path)
 	if err != nil {
 		return nil, nil, err
@@ -207,6 +212,11 @@ func Load(path string) (*Config, []string, error) {
 	var cfg Config
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, nil, err
+	}
+	for name, provider := range cfg.Providers {
+		provider.IMAP.Password.Directory = commandDirectory
+		provider.SMTP.Password.Directory = commandDirectory
+		cfg.Providers[name] = provider
 	}
 	warnings, err := cfg.Validate()
 	return &cfg, warnings, err

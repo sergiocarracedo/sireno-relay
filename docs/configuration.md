@@ -37,7 +37,8 @@ Edit the same YAML file, preserve mode `0600`, and validate it before restarting
 ${EDITOR:-vi} "$HOME/.config/sirenorelay/config.yml"
 chmod 600 "$HOME/.config/sirenorelay/config.yml"
 sirenorelay config-check --config "$HOME/.config/sirenorelay/config.yml"
-sirenorelay policy-check --config "$HOME/.config/sirenorelay/config.yml" --user hermes-agent --folder INBOX/Invoices
+sirenorelay policy-check --config "$HOME/.config/sirenorelay/config.yml" --user hermes-agent --live --folder INBOX/Invoices
+sirenorelay policy-check --config "$HOME/.config/sirenorelay/config.yml" --user hermes-agent --inbound --folder INBOX/Invoices --sender invoices@example.org --body "Invoice attached"
 ```
 
 The next operation reloads the file and uses the new policy immediately. If the replacement is invalid or unreadable, the operation fails closed until a valid owner-only configuration is restored. Keep a backup before changing a restrictive policy:
@@ -87,7 +88,7 @@ logging:
 | `smtp.username` | Yes | Upstream SMTP login. |
 | `smtp.password` | Yes | Password value, usually `"{env:SIRENO_SMTP_PASSWORD}"`, or a no-shell command array. |
 
-Use an environment variable for a direct value, for example `password: "{env:SIRENO_IMAP_PASSWORD}"`. Alternatively, `password: [pass, show, mail/personal-imap]` executes `pass show mail/personal-imap`. Command arrays never use a shell. V1 supports TLS IMAP/SMTP and password/app-password authentication only. It does not support OAuth, JMAP, POP3, or Gmail/Graph native APIs.
+Use an environment variable for a direct value, for example `password: "{env:SIRENO_IMAP_PASSWORD}"`. Alternatively, `password: [pass, show, mail/personal-imap]` executes `pass show mail/personal-imap`. Command arrays never use a shell and run with the configuration file's directory as their working directory, so `password: [cat, ./secrets/imap]` is relative to `config.yml`. V1 supports TLS IMAP/SMTP and password/app-password authentication only. It does not support OAuth, JMAP, POP3, or Gmail/Graph native APIs.
 
 ## `profiles.<name>`
 

@@ -107,6 +107,7 @@ func Secret(ctx context.Context, password config.Password) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, password.Command[0], password.Command[1:]...)
+	cmd.Dir = password.Directory
 	cmd.Stderr = io.Discard
 	var output bytes.Buffer
 	cmd.Stdout = &secretWriter{out: &output}

@@ -145,6 +145,21 @@ func TestLoadExpandsEnvironmentValues(t *testing.T) {
 	}
 }
 
+func TestLoadSetsPasswordCommandDirectory(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	if err := os.WriteFile(path, []byte(valid), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Providers["home"].IMAP.Password.Directory; got != dir {
+		t.Fatalf("password command directory = %q, want %q", got, dir)
+	}
+}
+
 func TestPasswordAcceptsEnvironmentValueOrCommand(t *testing.T) {
 	t.Setenv("SIRENO_TEST_PASSWORD", "agent-secret")
 	text := strings.Replace(valid, "password: [pass, imap]", `password: "{env:SIRENO_TEST_PASSWORD}"`, 1)
