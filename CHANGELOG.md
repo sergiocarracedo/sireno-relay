@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.5.1...v1.6.0) (2026-10-23)
+
+
+### Features
+
+* **policy-check:** simulate inbound and outbound policies ([#27](https://github.com/sergiocarracedo/sireno-relay/issues/27)) ([3a06707](https://github.com/sergiocarracedo/sireno-relay/commit/3a067071c3c59eccf6a4e4b06b626fb4797aeb62))
+
 ## [1.5.1](https://github.com/sergiocarracedo/sireno-relay/compare/v1.5.0...v1.5.1) (2026-10-23)
 
 
