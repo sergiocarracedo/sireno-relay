@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
+	"net/textproto"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -19,6 +23,7 @@ import (
 	"github.com/pterm/pterm"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/audit"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/config"
+	"github.com/sergiocarracedo/sireno-ai-relay/internal/mail"
 	proxymcp "github.com/sergiocarracedo/sireno-ai-relay/internal/mcp"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/onboard"
 	"github.com/sergiocarracedo/sireno-ai-relay/internal/policy"
@@ -141,15 +146,64 @@ func newConfigCheckCmd(v *viper.Viper) *cobra.Command {
 }
 
 func newPolicyCheckCmd(v *viper.Viper) *cobra.Command {
-	cmd := &cobra.Command{Use: "policy-check", Short: "Check a user's policy against a mailbox", Args: usageArgs(cobra.NoArgs)}
+	cmd := &cobra.Command{Use: "policy-check", Short: "Check a user's configured mail policy", Args: usageArgs(cobra.NoArgs)}
 	configFlag(v, cmd)
 	bindString(v, cmd.Flags(), "user", "", "agent name")
-	bindString(v, cmd.Flags(), "folder", "", "folder to inspect")
+	bindString(v, cmd.Flags(), "folder", "", "mailbox folder for inbound checks")
+	cmd.Flags().Bool("live", false, "count real messages visible in --folder")
+	cmd.Flags().Bool("inbound", false, "evaluate an inbound message")
+	cmd.Flags().Bool("outbound", false, "evaluate an outbound message")
+	cmd.Flags().String("message", "", "RFC 822 message file to evaluate")
+	cmd.Flags().StringArray("sender", nil, "inbound sender (repeatable)")
+	cmd.Flags().StringArray("recipient", nil, "outbound envelope recipient (repeatable)")
+	cmd.Flags().String("subject", "", "message subject")
+	cmd.Flags().String("body", "", "plain-text message body")
+	cmd.Flags().StringArray("attachment", nil, "attachment file (repeatable)")
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		if v.GetString("user") == "" || v.GetString("folder") == "" {
-			return usageError{errors.New("policy-check requires --user and --folder")}
+		user, folder := v.GetString("user"), v.GetString("folder")
+		live, _ := cmd.Flags().GetBool("live")
+		inbound, _ := cmd.Flags().GetBool("inbound")
+		outbound, _ := cmd.Flags().GetBool("outbound")
+		message, _ := cmd.Flags().GetString("message")
+		senders, _ := cmd.Flags().GetStringArray("sender")
+		recipients, _ := cmd.Flags().GetStringArray("recipient")
+		subject, _ := cmd.Flags().GetString("subject")
+		body, _ := cmd.Flags().GetString("body")
+		attachments, _ := cmd.Flags().GetStringArray("attachment")
+
+		if user == "" {
+			return usageError{errors.New("policy-check requires --user")}
 		}
-		return policyCheck(cmd.Context(), cmd.OutOrStdout(), v.GetString("config"), v.GetString("user"), v.GetString("folder"))
+		if live {
+			if inbound || outbound || message != "" || len(senders) > 0 || len(recipients) > 0 || cmd.Flags().Changed("subject") || cmd.Flags().Changed("body") || len(attachments) > 0 {
+				return usageError{errors.New("--live cannot be combined with message evaluation flags")}
+			}
+			if folder == "" {
+				return usageError{errors.New("--live requires --folder")}
+			}
+			return policyCheckLive(cmd.Context(), cmd.OutOrStdout(), v.GetString("config"), user, folder)
+		}
+		if inbound == outbound {
+			return usageError{errors.New("policy-check requires exactly one of --live, --inbound, or --outbound")}
+		}
+		if inbound && folder == "" {
+			return usageError{errors.New("--inbound requires --folder")}
+		}
+		if message != "" && (len(senders) > 0 || cmd.Flags().Changed("subject") || cmd.Flags().Changed("body") || len(attachments) > 0) {
+			return usageError{errors.New("--message cannot be combined with --sender, --subject, --body, or --attachment")}
+		}
+		if message == "" {
+			if inbound && len(senders) == 0 {
+				return usageError{errors.New("simulated inbound checks require --sender")}
+			}
+			if outbound && len(recipients) == 0 {
+				return usageError{errors.New("simulated outbound checks require --recipient")}
+			}
+			if body == "" && len(attachments) == 0 {
+				return usageError{errors.New("simulated checks require --body or --attachment")}
+			}
+		}
+		return policyCheckMessage(cmd.OutOrStdout(), v.GetString("config"), user, folder, inbound, message, senders, recipients, subject, body, attachments)
 	}
 	return cmd
 }
@@ -303,7 +357,7 @@ func loadConfig(path string, out io.Writer) (*config.Config, []string, error) {
 	return cfg, warnings, nil
 }
 
-func policyCheck(ctx context.Context, out io.Writer, path, user, folder string) error {
+func policyCheckLive(ctx context.Context, out io.Writer, path, user, folder string) error {
 	if _, _, err := loadConfig(path, out); err != nil {
 		return err
 	}
@@ -325,6 +379,160 @@ func policyCheck(ctx context.Context, out io.Writer, path, user, folder string) 
 	}
 	info(out, fmt.Sprintf("folder allowed; visible messages: %d", len(snapshot.Messages)))
 	return nil
+}
+
+func policyCheckMessage(out io.Writer, path, user, folder string, inbound bool, messagePath string, senders, recipients []string, subject, body string, attachmentPaths []string) error {
+	if _, _, err := loadConfig(path, out); err != nil {
+		return err
+	}
+	r, err := openRelay(path)
+	if err != nil {
+		return err
+	}
+	identity, err := r.Identity(user)
+	if err != nil {
+		return err
+	}
+	raw, err := policyCheckRawMessage(messagePath, identity.Account.Address, inbound, senders, recipients, subject, body, attachmentPaths)
+	if err != nil {
+		return err
+	}
+	rule := identity.Profile.Outbound
+	if inbound {
+		rule = identity.Profile.Inbound
+	}
+	message, err := mail.Evaluate(raw, rule)
+	if err != nil {
+		warning(out, "message denied by content policy")
+		return nil
+	}
+	if inbound {
+		if !identity.Policy.ReadFolder(folder) {
+			warning(out, "folder denied")
+			return nil
+		}
+		if !identity.Policy.ReadMessage(folder, message.From) {
+			warning(out, "message denied by inbound address policy")
+			return nil
+		}
+		policyCheckAllowed(out, "inbound", message.RemovedAttachments)
+		return nil
+	}
+	if len(message.From) != 1 || !strings.EqualFold(message.From[0], identity.Account.Address) {
+		warning(out, "message denied: From must be the configured provider address")
+		return nil
+	}
+	all := append([]string{}, recipients...)
+	all = append(all, message.To...)
+	all = append(all, message.Cc...)
+	all = append(all, message.Bcc...)
+	if !identity.Policy.Send(all) {
+		warning(out, "message denied by outbound address policy")
+		return nil
+	}
+	policyCheckAllowed(out, "outbound", message.RemovedAttachments)
+	return nil
+}
+
+func policyCheckAllowed(out io.Writer, direction string, removedAttachments bool) {
+	message := direction + " message allowed"
+	if removedAttachments {
+		message += "; one or more attachments removed by policy"
+	}
+	info(out, message)
+}
+
+func policyCheckRawMessage(messagePath, from string, inbound bool, senders, recipients []string, subject, body string, attachmentPaths []string) ([]byte, error) {
+	if messagePath != "" {
+		file, err := os.Open(messagePath)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		return io.ReadAll(io.LimitReader(file, mail.MaxMessage+1))
+	}
+	if !safePolicyCheckHeader(subject) || !safePolicyCheckHeaders(senders) || !safePolicyCheckHeaders(recipients) {
+		return nil, usageError{errors.New("sender, recipient, and subject must not contain line breaks")}
+	}
+	if inbound {
+		from = strings.Join(senders, ", ")
+	}
+	var raw bytes.Buffer
+	fmt.Fprintf(&raw, "From: %s\r\n", from)
+	if len(recipients) > 0 {
+		fmt.Fprintf(&raw, "To: %s\r\n", strings.Join(recipients, ", "))
+	}
+	fmt.Fprintf(&raw, "Subject: %s\r\n", subject)
+	if len(attachmentPaths) == 0 {
+		raw.WriteString("Content-Type: text/plain; charset=utf-8\r\n\r\n")
+		raw.WriteString(body)
+		return raw.Bytes(), nil
+	}
+	writer := multipart.NewWriter(&raw)
+	fmt.Fprintf(&raw, "Content-Type: multipart/mixed; boundary=%q\r\n\r\n", writer.Boundary())
+	textHeader := textproto.MIMEHeader{"Content-Type": {"text/plain; charset=utf-8"}}
+	text, err := writer.CreatePart(textHeader)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.WriteString(text, body); err != nil {
+		return nil, err
+	}
+	for _, path := range attachmentPaths {
+		data, err := readPolicyCheckAttachment(path)
+		if err != nil {
+			return nil, err
+		}
+		mediaType := mime.TypeByExtension(filepath.Ext(path))
+		if mediaType == "" {
+			mediaType = "application/octet-stream"
+		}
+		mediaType, _, err = mime.ParseMediaType(mediaType)
+		if err != nil {
+			return nil, err
+		}
+		disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(path)})
+		part, err := writer.CreatePart(textproto.MIMEHeader{"Content-Type": {mediaType}, "Content-Disposition": {disposition}})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := part.Write(data); err != nil {
+			return nil, err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return raw.Bytes(), nil
+}
+
+func readPolicyCheckAttachment(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, mail.MaxAttachment+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > mail.MaxAttachment {
+		return nil, fmt.Errorf("attachment %q exceeds %d bytes", path, mail.MaxAttachment)
+	}
+	return data, nil
+}
+
+func safePolicyCheckHeader(value string) bool {
+	return !strings.ContainsAny(value, "\r\n")
+}
+
+func safePolicyCheckHeaders(values []string) bool {
+	for _, value := range values {
+		if !safePolicyCheckHeader(value) {
+			return false
+		}
+	}
+	return true
 }
 
 func serve(ctx context.Context, out io.Writer, path string, debug bool) error {

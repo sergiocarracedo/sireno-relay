@@ -71,10 +71,12 @@ Before starting or changing access, run:
 
 ```sh
 sirenorelay config-check --config /path/to/config.yml
-sirenorelay policy-check --config /path/to/config.yml --user AGENT --folder FOLDER
+sirenorelay policy-check --config /path/to/config.yml --user AGENT --live --folder FOLDER
 ```
 
-`policy-check` reports allow/deny and visible message counts, not message text.
+`policy-check --live` reports visible message counts, not message text. Use
+`--inbound` or `--outbound` to simulate configured sender, recipient, content,
+and attachment policy from flags or an RFC 822 `--message` fixture.
 Test with representative folders and policies. Confirm the agent cannot see a
 private folder, messages from denied senders, disallowed attachments, or send
 to an unauthorized recipient. Do not use a real send to test denial.
@@ -133,7 +135,7 @@ delete, move, or arbitrary folder mutation.
 - `sirenorelay onboard`: interactive first-time config and token creation.
 - `sirenorelay config-check [--config PATH]`: validate permissions, YAML,
   references, rules, and provider/user configuration.
-- `sirenorelay policy-check --user NAME --folder NAME [--config PATH]`: show
+- `sirenorelay policy-check --user NAME --live --folder NAME [--config PATH]`: show
   whether that folder is allowed and how many messages are visible.
 - `sirenorelay serve [--config PATH]`: run the MCP endpoint. `--debug` emits
   operational metadata to stdout; MCP content is never logged.

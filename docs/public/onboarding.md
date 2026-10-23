@@ -58,7 +58,7 @@ Check the resulting setup:
 
 ```sh
 sirenorelay config-check
-sirenorelay policy-check --user default --folder INBOX
+sirenorelay policy-check --user default --live --folder INBOX
 ```
 
 Use the actual user and folder names shown by your generated configuration.

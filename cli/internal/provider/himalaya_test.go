@@ -91,6 +91,17 @@ func TestTemporaryHimalayaConfigIsOwnerOnlyAndCleanedUp(t *testing.T) {
 	}
 }
 
+func TestSecretReadsRelativeFileFromPasswordCommandDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "secret"), []byte("upstream-password\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	secret, err := Secret(context.Background(), config.Password{Command: []string{"cat", "./secret"}, Directory: dir})
+	if err != nil || secret != "upstream-password" {
+		t.Fatalf("secret=%q err=%v", secret, err)
+	}
+}
+
 func TestHimalayaFoldersUsesJSONAndDoesNotExposeConfigPath(t *testing.T) {
 	runner := &recordingRunner{output: []byte(`{"mailboxes":[{"name":"INBOX"},{"id":"archive"}]}`)}
 	account := config.Provider{
