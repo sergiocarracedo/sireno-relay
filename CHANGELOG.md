@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/sergiocarracedo/sireno-relay/compare/v1.5.0...v1.5.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **ci:** deploy Pages only from main ([#23](https://github.com/sergiocarracedo/sireno-relay/issues/23)) ([69f348e](https://github.com/sergiocarracedo/sireno-relay/commit/69f348e0c54bd3bacbe168102e84177934223e6c))
+
 ## [1.5.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.4.1...v1.5.0) (2026-10-22)
 
 
