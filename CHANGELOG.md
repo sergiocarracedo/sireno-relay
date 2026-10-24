@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.3](https://github.com/sergiocarracedo/sireno-relay/compare/v1.6.2...v1.6.3) (2026-10-24)
+
+
+### Bug Fixes
+
+* **search:** support keyword mailbox queries ([#34](https://github.com/sergiocarracedo/sireno-relay/issues/34)) ([acc2652](https://github.com/sergiocarracedo/sireno-relay/commit/acc26522e41dfc299ede9e3c129fde3f7fbb600b))
+* **website:** clarify agentic email access ([#33](https://github.com/sergiocarracedo/sireno-relay/issues/33)) ([b2c120d](https://github.com/sergiocarracedo/sireno-relay/commit/b2c120d76fdca8f6449232535b1c585b4bdffa2c))
+
 ## [1.6.2](https://github.com/sergiocarracedo/sireno-relay/compare/v1.6.1...v1.6.2) (2026-10-23)
 
 
