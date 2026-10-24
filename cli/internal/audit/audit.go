@@ -2,6 +2,7 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,6 +20,7 @@ import (
 
 const defaultRetentionDays = 7
 const defaultMaxFileBytes = 100 << 20
+const maxResponseSummaryBytes = 128 << 10
 
 // Open creates a JSON logger. Caller closes the returned closer at shutdown.
 func Open(cfg config.Logging) (*slog.Logger, io.Closer, error) {
@@ -187,7 +189,7 @@ func WrapMCP(next http.Handler, logger *slog.Logger, capture bool, user string) 
 			request = &metadataReadCloser{ReadCloser: req.Body}
 			req.Body = request
 		}
-		recorder := &responseRecorder{ResponseWriter: w}
+		recorder := &responseRecorder{ResponseWriter: w, capture: req.URL.Path == "/mcp"}
 		next.ServeHTTP(recorder, req)
 		if recorder.status == 0 {
 			recorder.status = http.StatusOK
@@ -200,8 +202,66 @@ func WrapMCP(next http.Handler, logger *slog.Logger, capture bool, user string) 
 		if user != "" {
 			attrs = append(attrs, slog.String("user", user))
 		}
+		attrs = append(attrs, responseSummary(toolName(requestBody), recorder)...)
 		logger.LogAttrs(req.Context(), slog.LevelInfo, "MCP request", attrs...)
 	})
+}
+
+func responseSummary(tool string, response *responseRecorder) []slog.Attr {
+	if response.truncated || response.status < http.StatusOK || response.status >= http.StatusMultipleChoices {
+		return nil
+	}
+	var value struct {
+		Error  *json.RawMessage `json:"error"`
+		Result struct {
+			IsError           bool            `json:"isError"`
+			Content           []mcpContent    `json:"content"`
+			StructuredContent json.RawMessage `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(response.body.Bytes(), &value) != nil {
+		return nil
+	}
+	if value.Error != nil || value.Result.IsError {
+		outcome := "failed"
+		for _, content := range value.Result.Content {
+			if strings.Contains(content.Text, "himalaya ") {
+				outcome = "provider_failed"
+				break
+			}
+		}
+		return []slog.Attr{slog.String("outcome", outcome)}
+	}
+	if len(value.Result.StructuredContent) == 0 {
+		return nil
+	}
+	switch tool {
+	case "list_folders":
+		var result struct {
+			Folders []string `json:"folders"`
+		}
+		if json.Unmarshal(value.Result.StructuredContent, &result) == nil {
+			return []slog.Attr{slog.String("outcome", "success"), slog.Int("folder_count", len(result.Folders)), slog.Any("folder_names", result.Folders)}
+		}
+	case "list_messages", "search_messages":
+		var result struct {
+			Messages []struct {
+				AttachmentCount int `json:"attachment_count"`
+			} `json:"messages"`
+		}
+		if json.Unmarshal(value.Result.StructuredContent, &result) == nil {
+			attachments := 0
+			for _, message := range result.Messages {
+				attachments += message.AttachmentCount
+			}
+			return []slog.Attr{slog.String("outcome", "success"), slog.Int("message_count", len(result.Messages)), slog.Int("attachment_count", attachments)}
+		}
+	}
+	return nil
+}
+
+type mcpContent struct {
+	Text string `json:"text"`
 }
 
 func rpcMethod(data []byte) string {
@@ -247,7 +307,10 @@ func (r *metadataReadCloser) Read(data []byte) (int, error) {
 
 type responseRecorder struct {
 	http.ResponseWriter
-	status int
+	status    int
+	capture   bool
+	truncated bool
+	body      bytes.Buffer
 }
 
 func (w *responseRecorder) WriteHeader(status int) {
@@ -258,7 +321,20 @@ func (w *responseRecorder) WriteHeader(status int) {
 }
 func (w *responseRecorder) Write(data []byte) (int, error) {
 	if w.status == 0 {
-		w.status = http.StatusOK
+		w.WriteHeader(http.StatusOK)
+	}
+	if w.capture && !w.truncated {
+		remaining := maxResponseSummaryBytes - w.body.Len()
+		if remaining <= 0 {
+			w.truncated = true
+		} else {
+			captured := len(data)
+			if captured > remaining {
+				captured = remaining
+				w.truncated = true
+			}
+			_, _ = w.body.Write(data[:captured])
+		}
 	}
 	return w.ResponseWriter.Write(data)
 }

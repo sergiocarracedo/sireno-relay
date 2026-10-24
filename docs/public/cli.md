@@ -71,6 +71,9 @@ subsequent operations use current policy.
 `--debug` is for controlled troubleshooting only: it enables debug-level
 operational metadata on stdout. SirenoRELAY does not record MCP request or
 response content, including when `logging.mcp.capture_content` is enabled.
+Default audit logs include only safe response summaries: visible folder names
+and counts, message and attachment counts, or a sanitized provider-failure
+outcome.
 
 ## `sirenorelay service ACTION [--config PATH]`
 
