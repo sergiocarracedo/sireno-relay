@@ -90,13 +90,23 @@ func TestWrapMCPRecordsAllowlistedResponseSummaries(t *testing.T) {
 }
 
 func TestWrapMCPClassifiesProviderFailuresWithoutLoggingErrorText(t *testing.T) {
-	entry := auditEntry(t, "search_messages", `{"jsonrpc":"2.0","result":{"isError":true,"content":[{"type":"text","text":"mailbox unavailable: himalaya envelope listing failed"}]}}`)
-	if entry["outcome"] != "provider_failed" {
-		t.Fatalf("entry=%#v", entry)
-	}
-	encoded, _ := json.Marshal(entry)
-	if strings.Contains(string(encoded), "himalaya") || strings.Contains(string(encoded), "mailbox unavailable") {
-		t.Fatalf("provider error leaked: %s", encoded)
+	for _, test := range []struct {
+		name, failure, operation, reason string
+	}{
+		{"envelope listing", "mailbox unavailable: himalaya envelope listing failed", "envelope_listing", "envelope_listing_failed"},
+		{"message read", "message unavailable: himalaya message read failed", "message_read", "message_read_failed"},
+		{"capacity", "capacity unavailable", "capability_check", "capacity_unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			entry := auditEntry(t, "search_messages", `{"jsonrpc":"2.0","result":{"isError":true,"content":[{"type":"text","text":"`+test.failure+`"}]}}`)
+			if entry["outcome"] != "provider_failed" || entry["provider_operation"] != test.operation || entry["failure_reason"] != test.reason {
+				t.Fatalf("entry=%#v", entry)
+			}
+			encoded, _ := json.Marshal(entry)
+			if strings.Contains(string(encoded), "himalaya") || strings.Contains(string(encoded), test.failure) {
+				t.Fatalf("provider error leaked: %s", encoded)
+			}
+		})
 	}
 }
 
