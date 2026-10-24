@@ -170,6 +170,9 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 // Himalaya's complete shared query language for callers that need it.
 func himalayaQuery(query string) string {
 	query = strings.TrimSpace(query)
+	if query == "" {
+		return ""
+	}
 	lower := strings.ToLower(query)
 	for _, prefix := range []string{"date ", "after ", "from ", "to ", "subject ", "body ", "flag ", "not ", "(", "order by "} {
 		if strings.HasPrefix(lower, prefix) {
