@@ -2,9 +2,9 @@
 import Button from "../components/Button.astro";
 import GitHubStarButton from "../components/GitHubStarButton.astro";
 import SiteFooter from "../components/SiteFooter.astro";
+import HeroScene from "../components/HeroScene.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import MailBoundaryDiagram from "../components/MailBoundaryDiagram.astro";
-import RelayIsometricDiagram from "../components/RelayIsometricDiagram.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
 import { withBase } from "../lib/with-base";
 import { version } from "../lib/version";
@@ -15,8 +15,9 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
 <SiteLayout title="SirenoRELAY — constrained email for agents" description="Give agents narrowly scoped, policy-filtered email access without upstream credentials.">
   <SiteHeader home />
   <main>
-    <section class="hero hero--stitch">
+    <section class="hero hero--stitch hero--scene">
       <div class="hero-aura" aria-hidden="true"></div>
+      <HeroScene />
       <div class="hero__inner shell">
         <div class="hero-copy">
           <p class="eyebrow eyebrow--pill"><span class="status-pulse"></span> YOUR MAILBOX GUARDIAN · v{version}</p>
@@ -28,7 +29,10 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
       </div>
     </section>
 
-    <RelayIsometricDiagram />
+    <section class="hero-route-legend" aria-label="How policy changes the route">
+      <article class="hero-route-card"><h2>Uncontrolled route</h2><p>A pickup carries <strong>PRIVATE DATA OUT</strong>, then returns with an unsafe payload that reaches the warehouse.</p></article>
+      <article class="hero-route-card hero-route-card--safe"><h2>SirenoRELAY checkpoint</h2><p>The guard keeps private data at the boundary and removes the unsafe payload before the pickup returns.</p></article>
+    </section>
 
     <section id="comparison" class="comparison-section"><div class="shell"><MailBoundaryDiagram /></div></section>
 
