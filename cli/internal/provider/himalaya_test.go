@@ -172,6 +172,39 @@ func TestHimalayaPageUsesBoundedSearchAndTargetedReads(t *testing.T) {
 	}
 }
 
+func TestHimalayaPageNormalizesKeywordSearchesAndPreservesHimalayaQueries(t *testing.T) {
+	account := config.Provider{Address: "owner@example.org", IMAP: config.Server{Address: "imap:993", Username: "owner", Password: config.Password{Value: "secret"}}, SMTP: config.Server{Address: "smtp:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}}}
+	for _, test := range []struct {
+		name, query, want string
+	}{
+		{"keyword", "arena", `subject "arena" or body "arena"`},
+		{"multi-word keyword", "arena para gato", `subject "arena para gato" or body "arena para gato"`},
+		{"quoted keyword", `"arena para gato"`, `subject "arena para gato" or body "arena para gato"`},
+		{"from predicate", "from billing@example.org", "from billing@example.org"},
+		{"to predicate", "to assistant@example.org", "to assistant@example.org"},
+		{"subject predicate", `subject "Mercadona ticket"`, `subject "Mercadona ticket"`},
+		{"body predicate", `body "arena para gato"`, `body "arena para gato"`},
+		{"date predicate", "date 2026-01-01", "date 2026-01-01"},
+		{"after predicate", "after 2026-01-01", "after 2026-01-01"},
+		{"flag predicate", "flag seen", "flag seen"},
+		{"negated predicate", "not flag seen", "not flag seen"},
+		{"boolean expression", "(from billing@example.org or from receipts@example.org) and after 2026-01-01", "(from billing@example.org or from receipts@example.org) and after 2026-01-01"},
+		{"sort-only expression", "order by date desc", "order by date desc"},
+		{"option-like keyword", "--config /owner-only/config.toml", `subject "--config /owner-only/config.toml" or body "--config /owner-only/config.toml"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runner := &recordingRunner{output: []byte(`[]`)}
+			if _, err := (Himalaya{Runner: runner}).Page(context.Background(), account, PageRequest{Folder: "INBOX", Page: 1, PageSize: 20, Query: test.query}); err != nil {
+				t.Fatal(err)
+			}
+			sequence := append([]string{"--page-size", "20", "--"}, strings.Fields(test.want)...)
+			if len(runner.args) != 1 || !containsSequence(runner.args[0], sequence...) {
+				t.Fatalf("query=%q command=%#v", test.query, runner.args)
+			}
+		})
+	}
+}
+
 func TestHimalayaPageDoesNotInterpretQueryTermsAsOptions(t *testing.T) {
 	runner := &recordingRunner{output: []byte(`[]`)}
 	account := config.Provider{Address: "owner@example.org", IMAP: config.Server{Address: "imap:993", Username: "owner", Password: config.Password{Value: "secret"}}, SMTP: config.Server{Address: "smtp:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}}}
@@ -179,7 +212,7 @@ func TestHimalayaPageDoesNotInterpretQueryTermsAsOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(runner.args) != 1 || !containsSequence(runner.args[0], "--page-size", "20", "--", "--config", "/owner-only/config.toml") {
+	if len(runner.args) != 1 || !containsSequence(runner.args[0], "--page-size", "20", "--", "subject", `"--config`, "/owner-only/config.toml\"", "or", "body", `"--config`, "/owner-only/config.toml\"") {
 		t.Fatalf("query options escaped the terminator: %#v", runner.args)
 	}
 }

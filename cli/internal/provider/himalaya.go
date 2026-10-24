@@ -121,16 +121,17 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 	if request.Folder == "" || request.Page == 0 || request.PageSize == 0 || request.PageSize > 20 || len(request.Query) > 512 || strings.ContainsAny(request.Query, "\r\n\x00") {
 		return Page{}, errors.New("invalid page request")
 	}
+	query := himalayaQuery(request.Query)
 	command := "list"
-	if request.Query != "" {
+	if query != "" {
 		command = "search"
 	}
 	args := []string{"--json", "envelope", command, "--mailbox", request.Folder, "--page", strconv.FormatUint(uint64(request.Page), 10), "--page-size", strconv.FormatUint(uint64(request.PageSize), 10)}
-	if request.Query != "" {
+	if query != "" {
 		// Query terms are agent-controlled. The option terminator keeps them from
 		// overriding the temporary owner-controlled Himalaya configuration.
 		args = append(args, "--")
-		args = append(args, strings.Fields(request.Query)...)
+		args = append(args, strings.Fields(query)...)
 	}
 	output, err := h.run(ctx, account, nil, args...)
 	if err != nil {
@@ -163,6 +164,19 @@ func (h Himalaya) Page(ctx context.Context, account config.Provider, request Pag
 		messages = append(messages, Message{ID: id, Generation: request.Folder, Raw: raw, Flags: knownFlags(envelope.Flags)})
 	}
 	return Page{Messages: messages, HasMore: len(envelopes) == int(request.PageSize)}, nil
+}
+
+// himalayaQuery lets an agent use a simple keyword search while preserving
+// Himalaya's complete shared query language for callers that need it.
+func himalayaQuery(query string) string {
+	query = strings.TrimSpace(query)
+	lower := strings.ToLower(query)
+	for _, prefix := range []string{"date ", "after ", "from ", "to ", "subject ", "body ", "flag ", "not ", "(", "order by "} {
+		if strings.HasPrefix(lower, prefix) {
+			return query
+		}
+	}
+	return "subject " + strconv.Quote(strings.Trim(query, `"`)) + " or body " + strconv.Quote(strings.Trim(query, `"`))
 }
 
 // decodeJSONArray accepts both Himalaya v2's named result object and the
