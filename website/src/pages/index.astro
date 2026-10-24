@@ -21,7 +21,7 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
         <div class="hero-copy">
           <p class="eyebrow eyebrow--pill"><span class="status-pulse"></span> YOUR MAILBOX GUARDIAN · v{version}</p>
           <h1>Agentic email access, <em>on your terms.</em></h1>
-          <p class="lede">A policy boundary between your mailbox and an agent. It lets the useful mail through—and keeps the rest, including your credentials, where it belongs.</p>
+          <p class="lede">A policy-boundary MCP between your mailbox and your agents. Control what they can see and do in your inbox: which folders, senders, and attachments they can access, and where they can send email.</p>
           <div class="hero-actions"><Button href="#install">Getting started <span>→</span></Button><Button href="#comparison" variant="secondary">Watch it work <span>↓</span></Button></div>
           <GitHubStarButton />
         </div>
@@ -45,9 +45,11 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
     <section id="architecture" class="security-band shell" aria-labelledby="security-title" data-reveal>
       <div class="security-copy"><p class="eyebrow">THE CREDENTIAL STAYS WITH THE OWNER</p><h2 id="security-title">An MCP tool call.<br /><em>Not a mailbox login.</em></h2><p>The agent sends a bearer token to SirenoRELAY’s MCP endpoint. SirenoRELAY—not the agent—loads the IMAP/SMTP credentials, talks to the mail server, applies policy, and returns only the allowed result.</p></div>
       <div class="security-stack" role="group" aria-label="Credential boundary flow">
-        <div><b>Agent</b><small>MCP tool call + scoped bearer token</small></div><i>→</i>
-        <div class="security-gateway"><b>SirenoRELAY</b><small>Owns credentials · checks policy · filters results</small></div><i>→</i>
-        <div><b>Mail server</b><small>Upstream credentials stay on this side</small></div>
+        <div class="security-endpoint"><b>Agent</b><small>MCP tool call + scoped bearer token</small></div>
+        <div class="security-link"><span class="security-arrow security-arrow--request">request <b aria-hidden="true">↓</b></span><span class="security-arrow security-arrow--response"><b aria-hidden="true">↑</b> filtered result</span></div>
+        <div class="security-gateway"><b>Sireno<span>RELAY</span></b><small>Policy boundary</small><ul class="security-blockers" aria-label="Policies enforced by SirenoRELAY"><li>Folder rules</li><li>Sender rules</li><li>Recipient rules</li></ul><p class="credential-lock"><span aria-hidden="true">◆</span> Credentials never cross this boundary</p></div>
+        <div class="security-link"><span class="security-arrow security-arrow--request">authorized mail <b aria-hidden="true">↓</b></span><span class="security-arrow security-arrow--response"><b aria-hidden="true">↑</b> upstream result</span></div>
+        <div class="security-endpoint security-endpoint--server"><b>Mail server</b><small>IMAP / SMTP credentials stay here</small></div>
       </div>
       <p class="security-deploy">Run it under a dedicated OS service user or in an isolated container the agent cannot inspect. Do not give the agent access to the config, secret files, process environment, or a direct upstream route. <a href={withBase("/docs/security")}>Read the security model →</a></p>
     </section>
