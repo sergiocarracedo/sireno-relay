@@ -223,14 +223,10 @@ func responseSummary(tool string, response *responseRecorder) []slog.Attr {
 		return nil
 	}
 	if value.Error != nil || value.Result.IsError {
-		outcome := "failed"
-		for _, content := range value.Result.Content {
-			if strings.Contains(content.Text, "himalaya ") {
-				outcome = "provider_failed"
-				break
-			}
+		if operation, reason, ok := providerFailure(value.Result.Content); ok {
+			return []slog.Attr{slog.String("outcome", "provider_failed"), slog.String("provider_operation", operation), slog.String("failure_reason", reason)}
 		}
-		return []slog.Attr{slog.String("outcome", outcome)}
+		return []slog.Attr{slog.String("outcome", "failed")}
 	}
 	if len(value.Result.StructuredContent) == 0 {
 		return nil
@@ -258,6 +254,22 @@ func responseSummary(tool string, response *responseRecorder) []slog.Attr {
 		}
 	}
 	return nil
+}
+
+// providerFailure classifies only known, non-sensitive upstream failures.
+// The original provider error is never included in the audit record.
+func providerFailure(contents []mcpContent) (operation, reason string, ok bool) {
+	for _, content := range contents {
+		switch {
+		case strings.Contains(content.Text, "himalaya envelope listing failed"):
+			return "envelope_listing", "envelope_listing_failed", true
+		case strings.Contains(content.Text, "himalaya message read failed"):
+			return "message_read", "message_read_failed", true
+		case strings.Contains(content.Text, "capacity unavailable"):
+			return "capability_check", "capacity_unavailable", true
+		}
+	}
+	return "", "", false
 }
 
 type mcpContent struct {

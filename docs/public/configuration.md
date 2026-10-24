@@ -158,7 +158,8 @@ the same OS user.
 - `mcp.capture_content`: retained for configuration compatibility. Request and
   response content is never recorded. Audit output includes bounded operational
   metadata plus safe summaries: visible folder names/counts and message/
-  attachment counts. It does not include provider error text, credentials,
+  attachment counts. Provider failures include stable operation/reason fields,
+  but not provider error text, credentials,
   bearer tokens, message subjects, addresses, bodies, attachment names, or
   attachment bytes.
 
