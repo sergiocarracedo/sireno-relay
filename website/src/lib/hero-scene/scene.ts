@@ -48,8 +48,8 @@ async function addCountrysideTerrain(scene: THREE.Scene, url: string) {
   scene.add(terrain);
   const scale = .55;
   const step = 4 * scale;
-  // 81 rotations of the supplied 4×4 tile create one varied but coherent landscape.
-  for (let row = -4; row <= 4; row++) for (let column = -4; column <= 4; column++) {
+  // A 15×15 field extends beyond the camera crop, so every visible edge stays terrain.
+  for (let row = -7; row <= 7; row++) for (let column = -7; column <= 7; column++) {
     const tile = gltf.scene.clone(true);
     tile.scale.setScalar(scale);
     tile.position.set(column * step, -.225, row * step);

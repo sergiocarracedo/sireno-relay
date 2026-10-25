@@ -2,7 +2,7 @@
 .hero--scene .hero__inner { position: relative; z-index: 2; pointer-events: none; }
 .hero--scene .hero__inner a,.hero--scene .hero__inner button { pointer-events: auto; }
 .hero--scene .hero-copy { margin-bottom: 20px; }
-.hero-scene { position: relative; width: 100%; min-height: 550px; margin-top: -12px; overflow: hidden; }
+.hero-scene { position: relative; width: 100%; min-height: 650px; margin-top: -12px; overflow: hidden; }
 .hero-scene__art { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(180deg, transparent 2%, #b6d8c0 24%, #d2e3c4 76%, #e7efd9); }
 .hero-scene__art::after { content: ""; position: absolute; z-index: 1; top: 0; right: 0; left: 0; height: 125px; background: linear-gradient(#142b1f, transparent); pointer-events: none; }
 .hero-scene__poster,.hero-scene__canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
@@ -34,7 +34,7 @@
 .route-comparison__outcomes b { color: #bc6350; }
 .route-comparison__route--safe .route-comparison__outcomes b { color: var(--moss); }
 @media (max-width: 680px) {
-  .hero-scene { height: 700px; margin-top: 0; }
+  .hero-scene { height: 800px; margin-top: 0; }
   .hero-scene__art { background: linear-gradient(#b6d8c0, #dceacb); }
   .hero-scene__poster { height: 50%; object-fit: cover; }
   .hero-scene__poster--risk { object-position: left; }
