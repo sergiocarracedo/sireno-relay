@@ -1,0 +1,14 @@
+cli/internal/onboard/onboard.go
+  h_f90ee31b03fc41 69-72,74-80,163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d4bbd07801f0bd4a80ed7e46b6e8f24f88534c6e",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
