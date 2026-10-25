@@ -1,0 +1,14 @@
+website/src/styles/relay-isometric.css
+  h_f90ee31b03fc41 144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "69f640699a8f9bd9c56f83e27946b9a15f67728f",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
