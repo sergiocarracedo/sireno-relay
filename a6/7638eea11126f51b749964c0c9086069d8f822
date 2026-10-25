@@ -1,0 +1,14 @@
+website/src/pages/index.astro
+  h_f90ee31b03fc41 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a67638eea11126f51b749964c0c9086069d8f822",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
