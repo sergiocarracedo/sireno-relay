@@ -99,7 +99,7 @@ function addScenery(scene: THREE.Scene, models: { rock: THREE.Object3D; spruce: 
 
   // A dense band along the far edge fills the top of the hero like a forest backdrop.
   for (let row = 0; row < 12; row++) {
-    for (let column = 0; column < 43; column++) {
+    for (let column = -22; column < 65; column++) {
       const seed = row * 37 + column * 19;
       const across = (column - 21) * 1.82 + (row % 2) * .91 + Math.sin(seed * 2.1) * .32;
       const forestEdge = 29 + Math.sin(across * .13) * 4 + Math.sin(across * .27) * 1.25;
@@ -214,6 +214,7 @@ type Lane = {
   privateBox: THREE.Group;
   bomb: THREE.Group;
   bombSparks: THREE.Group;
+  explosion?: THREE.Group;
   checkpoints: Checkpoint[];
   exclamation?: THREE.Group;
 };
@@ -234,7 +235,7 @@ function placeCargo(object: THREE.Group, truck: THREE.Group, root: THREE.Group, 
   const onTruck = where === "truck";
   const parent = onTruck ? truck : root;
   if (object.parent !== parent) parent.add(object);
-  object.visible = where !== "outside" && where !== "hidden" && where !== "booth";
+  object.visible = where !== "outside" && where !== "hidden" && where !== "booth" && where !== "exploding";
   if (onTruck) object.position.set(x, BED_Y + height, -.9);
   if (where === "warehouse") object.position.set(-2.8 + x, height, HOUSE_Z);
 }
@@ -306,6 +307,19 @@ function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: 
       lane.checkpoints.push({ z, barrier, guard, mixer, duration: Math.max(idle?.duration ?? 0, walk?.duration ?? 0, 3), idle: idleAction, walk: walkAction });
     }
   } else {
+    const explosion = new THREE.Group();
+    explosion.position.set(-3.2, .9, HOUSE_Z + 2.3);
+    root.add(explosion);
+    explosion.add(new THREE.Mesh(new THREE.IcosahedronGeometry(.5, 0), new THREE.MeshBasicMaterial({ color: 0xffea81, transparent: true })));
+    explosion.add(new THREE.Mesh(new THREE.TorusGeometry(.7, .06, 3, 12), new THREE.MeshBasicMaterial({ color: 0xff9a42, transparent: true })));
+    for (let i = 0; i < 12; i++) {
+      explosion.add(new THREE.Mesh(
+        new THREE.OctahedronGeometry(.12 + (i % 3) * .03),
+        new THREE.MeshBasicMaterial({ color: i % 3 === 0 ? 0xff7445 : 0xffd358, transparent: true }),
+      ));
+    }
+    explosion.visible = false;
+    lane.explosion = explosion;
     const exclamation = new THREE.Group();
     root.add(exclamation); exclamation.position.set(-1.68, .6, -7);
     exclamation.rotation.y = Math.PI / 2;
@@ -330,10 +344,8 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
   loader.setDRACOLoader(draco);
   const [road, sedan, house, officer, box, specialBox, bomb, tower, rock, spruce, oak] = await Promise.all([loader.loadAsync(roadUrl), loader.loadAsync(carUrl), loader.loadAsync(houseUrl), loader.loadAsync(officerUrl), loader.loadAsync(boxUrl), loader.loadAsync(specialBoxUrl), loader.loadAsync(bombUrl), loader.loadAsync(towerUrl), loader.loadAsync(sceneryUrls.rock), loader.loadAsync(sceneryUrls.spruce), loader.loadAsync(sceneryUrls.oak)]);
   draco.dispose();
-  const backdrop = new THREE.Group();
-  scene.add(backdrop);
-  addFacetedGround(backdrop);
-  addScenery(backdrop, { rock: rock.scene, spruce: spruce.scene, oak: oak.scene });
+  addFacetedGround(scene);
+  addScenery(scene, { rock: rock.scene, spruce: spruce.scene, oak: oak.scene });
   const unsafe = buildLane(scene, new THREE.Vector3(ROAD_CENTERS[0][0], 0, ROAD_CENTERS[0][1]), false, logoUrl, road.scene, sedan.scene, house.scene, officer.scene, officer.animations, box.scene, specialBox.scene, bomb.scene, tower.scene);
   const safe = buildLane(scene, new THREE.Vector3(ROAD_CENTERS[1][0], 0, ROAD_CENTERS[1][1]), true, logoUrl, road.scene, sedan.scene, house.scene, officer.scene, officer.animations, box.scene, specialBox.scene, bomb.scene, tower.scene);
   const labels = {
@@ -400,6 +412,25 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
       spark.position.set(Math.sin(phase) * .12, .43 + i * .047 + Math.cos(phase * 1.3) * .045, Math.cos(phase) * .1);
       spark.scale.setScalar(.75 + .25 * Math.sin(phase * 1.7));
     });
+    if (lane.explosion) {
+      const progress = THREE.MathUtils.clamp((elapsed % 20 - 16.8), 0, 1);
+      lane.explosion.visible = state.bomb === "exploding";
+      lane.explosion.children.forEach((piece, i) => {
+        const material = (piece as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        material.opacity = (1 - progress) ** 2;
+        if (i === 0) {
+          piece.scale.setScalar(.3 + progress * 1.4);
+        } else if (i === 1) {
+          piece.scale.setScalar(.2 + progress * 1.8);
+        } else {
+          const angle = i * 2.39996;
+          const distance = progress * (1.8 + (i % 4) * .2);
+          piece.position.set(Math.cos(angle) * distance, Math.sin(angle * 2) * distance * .55 + progress * .6, Math.sin(angle) * distance);
+          piece.rotation.set(progress * i, progress * i * .7, progress * i * .4);
+          piece.scale.setScalar(1 - progress * .7);
+        }
+      });
+    }
     for (const checkpoint of lane.checkpoints) {
       const active = state.inbound === (checkpoint.z > 0);
       const progress = active ? state.guardReach : 0;
@@ -482,36 +513,20 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
     } else {
       renderer.setViewport(0, 0, width, height);
       const aspect = width / height;
-      const wide = THREE.MathUtils.smoothstep(aspect, 1.3, 2.3);
-      // Keep the forest framing fixed while placing the roads below the copy.
-      unsafe.root.visible = safe.root.visible = false;
-      camera.left = -Math.max(29, 19 * aspect) / 2;
-      camera.right = -camera.left;
-      camera.top = camera.right / aspect; camera.bottom = -camera.top;
-      camera.position.set(16 + ROAD_SHIFT.x * wide, 23 - 8.8 * wide, 27 + ROAD_SHIFT.y * wide);
-      camera.lookAt(ROAD_SHIFT.x * wide, 8.5 - 8.8 * wide, ROAD_SHIFT.y * wide);
-      camera.updateProjectionMatrix();
-      renderer.render(scene, camera);
-      backdrop.visible = false;
-      unsafe.root.visible = safe.root.visible = true;
-      // Give both roads room below the hero copy on wide screens.
-      const verticalSpan = Math.max(29 / aspect, THREE.MathUtils.lerp(19, 38, wide));
+      // Keep the scene's vertical framing constant; width only reveals more terrain.
+      const verticalSpan = 28;
       const span = verticalSpan * aspect;
       camera.left = -span / 2; camera.right = span / 2;
       camera.top = verticalSpan / 2; camera.bottom = -camera.top;
-      camera.position.set(16 + ROAD_SHIFT.x * wide, 23 - 4.5 * wide, 27 + ROAD_SHIFT.y * wide);
-      camera.lookAt(ROAD_SHIFT.x * wide, 8.5 - 4.5 * wide, ROAD_SHIFT.y * wide);
+      camera.position.set(16, 23, 27);
+      camera.lookAt(0, 8.5, 0);
       unsafe.root.rotation.y = safe.root.rotation.y = ROAD_ANGLE;
       camera.updateProjectionMatrix();
       pose(unsafe, elapsed, false, getViewportExit(unsafe));
       pose(safe, elapsed, true, getViewportExit(safe));
       placeHouseLabel(unsafe, labels.unsafe, 0, height);
       placeHouseLabel(safe, labels.safe, 0, height);
-      renderer.autoClear = false;
-      renderer.clearDepth();
       renderer.render(scene, camera);
-      renderer.autoClear = true;
-      backdrop.visible = true;
     }
   }
 

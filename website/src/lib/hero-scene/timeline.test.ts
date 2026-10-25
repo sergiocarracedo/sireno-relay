@@ -13,12 +13,12 @@ test("identical outbound loads diverge only at checkpoint", () => {
   assert.equal(routeAt(8, false).privateBox, "outside");
 });
 
-test("inbound bomb reaches only the unprotected warehouse", () => {
+test("the inbound bomb bursts only beside the unprotected house", () => {
   assert.equal(routeAt(12, false).bomb, "truck");
   assert.equal(routeAt(12, true).bomb, "truck");
   assert.equal(routeAt(15, true).bomb, "handoff");
   assert.equal(routeAt(17, true).bomb, "booth");
-  assert.equal(routeAt(17, false).bomb, "warehouse");
+  assert.equal(routeAt(17, false).bomb, "exploding");
   assert.equal(routeAt(17, true).privateBox, "booth");
 });
 
@@ -39,6 +39,7 @@ test("the protected lane never delivers restricted cargo or the return bomb", ()
     const directState = routeAt(t, false);
     assert.notEqual(protectedState.privateBox, "outside");
     assert.notEqual(protectedState.bomb, "warehouse");
+    assert.notEqual(protectedState.bomb, "exploding");
     assert.notEqual(directState.privateBox, "booth");
     assert.notEqual(directState.bomb, "booth");
     assert.equal(directState.guardReach, 0);
@@ -62,8 +63,10 @@ test("each transition has a visible dwell before the next trip", () => {
   assert.equal(routeAt(13.59, true).bomb, "truck");
   assert.equal(routeAt(14.0, true).bomb, "handoff");
   assert.equal(routeAt(15.5, true).bomb, "booth");
-  assert.equal(routeAt(16.8, false).bomb, "warehouse");
-  assert.equal(routeAt(19.99, false).bomb, "warehouse");
+  assert.equal(routeAt(16.8, false).bomb, "exploding");
+  assert.equal(routeAt(17.79, false).bomb, "exploding");
+  assert.equal(routeAt(17.8, false).bomb, "hidden");
+  assert.equal(routeAt(19.99, false).bomb, "hidden");
 });
 
 test("both trips move left to right and use opposite viewport edges", () => {

@@ -15,7 +15,7 @@ export type RouteState = {
   inbound: boolean;
   ordinary: number;
   privateBox: CargoLocation;
-  bomb: CargoLocation | "hidden";
+  bomb: CargoLocation | "hidden" | "exploding";
   barrierRaised: boolean;
   guardReach: number;
   guardWalking: boolean;
@@ -82,7 +82,7 @@ export function routeAt(elapsed: number, protectedRoute: boolean, exitZ = 20): R
       }
       state.bomb = t < 14 ? "truck" : t < 15.5 ? "handoff" : "booth";
     }
-    if (!protectedRoute && t >= 16.8) state.bomb = "warehouse";
+    if (!protectedRoute && t >= 16.8) state.bomb = t < 17.8 ? "exploding" : "hidden";
   }
   return state;
 }
