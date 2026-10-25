@@ -64,7 +64,16 @@ function addFacetedGround(scene: THREE.Scene) {
   }
   const facetedGeometry = geometry.toNonIndexed();
   facetedGeometry.computeVertexNormals();
-  const ground = new THREE.Mesh(facetedGeometry, new THREE.MeshLambertMaterial({ color: 0x347a55, flatShading: true }));
+  const faceColors = new Float32Array(facetedGeometry.getAttribute("position").count * 3);
+  const baseGreen = new THREE.Color(0x43845e);
+  const shadedGreen = new THREE.Color(0x36714f);
+  for (let face = 0; face < faceColors.length / 9; face++) {
+    const shadeFace = (face * 37 + Math.floor(face / 7) * 13) % 11 === 0;
+    const color = shadeFace ? shadedGreen : baseGreen;
+    for (let vertex = 0; vertex < 3; vertex++) color.toArray(faceColors, face * 9 + vertex * 3);
+  }
+  facetedGeometry.setAttribute("color", new THREE.BufferAttribute(faceColors, 3));
+  const ground = new THREE.Mesh(facetedGeometry, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   ground.name = "dark-faceted-ground";
   scene.add(ground);
 }
@@ -88,7 +97,8 @@ function addScenery(scene: THREE.Scene, models: { rock: THREE.Object3D; spruce: 
     for (let column = 0; column < 43; column++) {
       const seed = row * 37 + column * 19;
       const across = (column - 21) * 1.82 + (row % 2) * .91 + Math.sin(seed * 2.1) * .32;
-      const depth = 29 + row * 1.85 + Math.cos(seed * 1.7) * .3;
+      const forestEdge = 29 + Math.sin(across * .13) * 4 + Math.sin(across * .27) * 1.25;
+      const depth = forestEdge + row * 1.85 + Math.cos(seed * 1.7) * .3;
       const x = screenRight.x * across + awayFromCamera.x * depth;
       const z = screenRight.y * across + awayFromCamera.y * depth;
       const oak = seed % 6 === 0;
