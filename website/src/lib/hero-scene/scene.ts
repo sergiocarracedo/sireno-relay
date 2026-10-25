@@ -344,8 +344,10 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
   loader.setDRACOLoader(draco);
   const [road, sedan, house, officer, box, specialBox, bomb, tower, rock, spruce, oak] = await Promise.all([loader.loadAsync(roadUrl), loader.loadAsync(carUrl), loader.loadAsync(houseUrl), loader.loadAsync(officerUrl), loader.loadAsync(boxUrl), loader.loadAsync(specialBoxUrl), loader.loadAsync(bombUrl), loader.loadAsync(towerUrl), loader.loadAsync(sceneryUrls.rock), loader.loadAsync(sceneryUrls.spruce), loader.loadAsync(sceneryUrls.oak)]);
   draco.dispose();
-  addFacetedGround(scene);
-  addScenery(scene, { rock: rock.scene, spruce: spruce.scene, oak: oak.scene });
+  const backdrop = new THREE.Group();
+  scene.add(backdrop);
+  addFacetedGround(backdrop);
+  addScenery(backdrop, { rock: rock.scene, spruce: spruce.scene, oak: oak.scene });
   const unsafe = buildLane(scene, new THREE.Vector3(ROAD_CENTERS[0][0], 0, ROAD_CENTERS[0][1]), false, logoUrl, road.scene, sedan.scene, house.scene, officer.scene, officer.animations, box.scene, specialBox.scene, bomb.scene, tower.scene);
   const safe = buildLane(scene, new THREE.Vector3(ROAD_CENTERS[1][0], 0, ROAD_CENTERS[1][1]), true, logoUrl, road.scene, sedan.scene, house.scene, officer.scene, officer.animations, box.scene, specialBox.scene, bomb.scene, tower.scene);
   const labels = {
@@ -482,6 +484,9 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
 
   function render(elapsed: number) {
     const rect = canvas.getBoundingClientRect();
+    const turn = THREE.MathUtils.degToRad(5) * THREE.MathUtils.clamp(-rect.top / rect.height, 0, 1);
+    const cosine = Math.cos(turn);
+    const sine = Math.sin(turn);
     const nextWidth = Math.max(1, Math.floor(rect.width));
     const nextHeight = Math.max(1, Math.floor(rect.height));
     if (nextWidth !== width || nextHeight !== height) {
@@ -493,21 +498,29 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
     if (mobile) {
       const half = height / 2;
       for (const [lane, bottom] of [[unsafe, half], [safe, 0]] as const) {
-        unsafe.root.visible = lane === unsafe;
-        safe.root.visible = lane === safe;
+        unsafe.root.visible = safe.root.visible = false;
         renderer.setViewport(0, bottom, width, half);
         renderer.setScissor(0, bottom, width, half);
         const aspect = width / half;
         const span = 19.5;
         camera.left = -span / 2; camera.right = span / 2;
         camera.top = span / (2 * aspect); camera.bottom = -camera.top;
-        camera.position.set(lane.root.position.x + 10, 18, 16.875);
+        camera.position.set(lane.root.position.x + 10 * cosine + 16.875 * sine, 18, 16.875 * cosine - 10 * sine);
         camera.lookAt(lane.root.position.x, .1, 0);
         lane.root.rotation.y = ROAD_ANGLE;
         camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+        backdrop.visible = false;
+        lane.root.visible = true;
+        camera.position.y += .6;
+        camera.lookAt(lane.root.position.x, .7, 0);
         pose(lane, elapsed, lane === safe, getViewportExit(lane));
         placeHouseLabel(lane, lane === safe ? labels.safe : labels.unsafe, bottom, half);
+        renderer.autoClear = false;
+        renderer.clearDepth();
         renderer.render(scene, camera);
+        renderer.autoClear = true;
+        backdrop.visible = true;
       }
       unsafe.root.visible = safe.root.visible = true;
     } else {
@@ -518,15 +531,25 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
       const span = verticalSpan * aspect;
       camera.left = -span / 2; camera.right = span / 2;
       camera.top = verticalSpan / 2; camera.bottom = -camera.top;
-      camera.position.set(16, 23, 27);
+      unsafe.root.visible = safe.root.visible = false;
+      camera.position.set(16 * cosine + 27 * sine, 23, 27 * cosine - 16 * sine);
       camera.lookAt(0, 8.5, 0);
-      unsafe.root.rotation.y = safe.root.rotation.y = ROAD_ANGLE;
       camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
+      backdrop.visible = false;
+      unsafe.root.visible = safe.root.visible = true;
+      camera.position.y += .9;
+      camera.lookAt(0, 9.4, 0);
+      unsafe.root.rotation.y = safe.root.rotation.y = ROAD_ANGLE;
       pose(unsafe, elapsed, false, getViewportExit(unsafe));
       pose(safe, elapsed, true, getViewportExit(safe));
       placeHouseLabel(unsafe, labels.unsafe, 0, height);
       placeHouseLabel(safe, labels.safe, 0, height);
+      renderer.autoClear = false;
+      renderer.clearDepth();
       renderer.render(scene, camera);
+      renderer.autoClear = true;
+      backdrop.visible = true;
     }
   }
 
