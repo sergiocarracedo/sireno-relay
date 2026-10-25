@@ -70,6 +70,19 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
       </div>
     </section>
 
+    <section class="ha-addon shell" aria-labelledby="ha-addon-title" data-reveal>
+      <div class="ha-addon-copy">
+        <p class="eyebrow"><span class="eyebrow-mark"></span> SIRENORELAY / HOME ASSISTANT</p>
+        <h2 id="ha-addon-title">Mail, on your terms.<br /><em>On Home Assistant.</em></h2>
+        <p>Run SirenoRELAY as a Home Assistant add-on. Configure the relay in its Web UI, keep mail credentials inside the add-on, and connect agents through its policy-filtered MCP bridge.</p>
+        <a class="ha-addon-link" href="https://github.com/sergiocarracedo/sireno-relay-ha-addon#install" target="_blank" rel="noreferrer">Explore the Home Assistant add-on <span aria-hidden="true">↗</span></a>
+      </div>
+      <figure class="ha-addon-figure">
+        <img src={withBase("/sireno-relay-home-assistant.webp")} width="1916" height="958" alt="SirenoRELAY Home Assistant add-on configuration page, with tabs for configuration, MCP clients, LAN access, and policy checking." loading="lazy" decoding="async" />
+        <figcaption>Configure SirenoRELAY from Home Assistant’s add-on Web UI.</figcaption>
+      </figure>
+    </section>
+
     <section id="security" class="docs-cta shell" data-reveal>
        <div><p class="eyebrow">OWNER-OPERATED</p><h2>Configure the boundary.<br />Then hand over one token.</h2></div>
        <div><p>Start with interactive onboarding, inspect the policy model, and keep upstream credentials outside the agent’s reach.</p><Button href={withBase("/docs")}>Read the docs <span>→</span></Button></div>

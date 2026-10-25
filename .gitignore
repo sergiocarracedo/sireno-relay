@@ -10,3 +10,4 @@ dist/
 website/node_modules/
 website/.astro/
 website/dist/
+assets/3d/
