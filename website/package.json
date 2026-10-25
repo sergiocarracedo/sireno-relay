@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build"
+    "build": "astro build",
+    "test": "node --experimental-strip-types --test src/lib/hero-scene/timeline.test.ts"
   },
   "devDependencies": {
+    "@types/three": "^0.186.0",
     "astro": "^5.0.0"
   },
   "dependencies": {

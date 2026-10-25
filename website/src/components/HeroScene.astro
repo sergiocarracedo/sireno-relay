@@ -2,191 +2,116 @@
 import { withBase } from "../lib/with-base";
 ---
 
-<div class="hero-scene" data-hero-scene data-logo={withBase("/logo.png")} aria-hidden="true">
-  <div class="hero-scene__fallback">
-    <div class="hero-scene__ridge hero-scene__ridge--one"></div>
-    <div class="hero-scene__ridge hero-scene__ridge--two"></div>
-    <div class="hero-scene__road hero-scene__road--risk"></div>
-    <div class="hero-scene__road hero-scene__road--safe"></div>
-    <span class="hero-scene__warehouse hero-scene__warehouse--risk"></span>
-    <span class="hero-scene__warehouse hero-scene__warehouse--safe"></span>
-    <span class="hero-scene__checkpoint"></span>
+<div class="hero-scene" data-hero-scene data-logo={withBase("/logo.png")}>
+  <div class="hero-scene__art" aria-hidden="true">
+    <img class="hero-scene__poster hero-scene__poster--risk" src={withBase("/hero-scene-poster.svg")} width="1200" height="540" alt="" />
+    <img class="hero-scene__poster hero-scene__poster--safe" src={withBase("/hero-scene-poster.svg")} width="1200" height="540" alt="" />
+    <canvas class="hero-scene__canvas" data-hero-canvas></canvas>
+    <span class="hero-scene__label hero-scene__label--risk"><i></i> NO POLICY · EXPOSED</span>
+    <span class="hero-scene__label hero-scene__label--safe"><i></i> SIRENORELAY · PROTECTED</span>
+    <span class="hero-scene__verdict hero-scene__verdict--risk">PRIVATE DATA OUT · UNSAFE RETURN IN</span>
+    <span class="hero-scene__verdict hero-scene__verdict--safe">PRIVATE DATA HELD · UNSAFE RETURN STOPPED</span>
   </div>
-  <canvas class="hero-scene__canvas" data-hero-scene-canvas></canvas>
+  <button class="hero-scene__control" data-hero-control type="button" aria-label="Pause scene" hidden>Pause motion <span aria-hidden="true">Ⅱ</span></button>
 </div>
-<button class="hero-scene__control" type="button" data-hero-scene-control aria-pressed="false">Pause scene</button>
 
 <script>
-  import * as THREE from "three";
+  const root = document.querySelector<HTMLElement>("[data-hero-scene]");
+  const canvas = root?.querySelector<HTMLCanvasElement>("[data-hero-canvas]");
+  const control = root?.querySelector<HTMLButtonElement>("[data-hero-control]");
 
-  const container = document.querySelector<HTMLElement>("[data-hero-scene]");
-  const canvas = container?.querySelector<HTMLCanvasElement>("[data-hero-scene-canvas]");
-  const control = document.querySelector<HTMLButtonElement>("[data-hero-scene-control]");
+  if (root && canvas && control) {
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let scene: Awaited<ReturnType<typeof import("../lib/hero-scene/scene")["createHeroScene"]>> | undefined;
+    let elapsed = 4.8;
+    let frame = 0;
+    let last = 0;
+    let visible = false;
+    let paused = false;
+    let disposed = false;
+    let loading = false;
 
-  if (container && canvas) {
-    try {
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-      const scene = new THREE.Scene();
-      const camera = new THREE.OrthographicCamera(-14, 14, 11, -11, .1, 100);
-      camera.position.set(16, 20, 22);
-      camera.lookAt(0, 0, 0);
-
-      scene.add(new THREE.HemisphereLight(0xd9ffd0, 0x173023, 2.3));
-      const sun = new THREE.DirectionalLight(0xeaffc0, 2.8);
-      sun.position.set(-8, 14, 8);
-      scene.add(sun);
-
-      const matte = (color: number, emissive = 0x000000) => new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: emissive ? .85 : 0, flatShading: true, roughness: .86, metalness: 0 });
-      const groundMaterial = matte(0x1b5635);
-      const roadMaterial = matte(0x274338);
-      const yellow = matte(0xd2f824, 0x657800);
-      const cyan = matte(0x54e1bf, 0x0a4135);
-      const privateMaterial = matte(0xeaff6e, 0x92b500);
-      const bombMaterial = matte(0x18201c);
-      const red = matte(0xe86f4d, 0x641a0e);
-
-      function box(width: number, height: number, depth: number, material: THREE.Material, x = 0, y = 0, z = 0) {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-        mesh.position.set(x, y + height / 2, z);
-        scene.add(mesh);
-        return mesh;
-      }
-
-      const terrain = box(29, 1.3, 22, groundMaterial, 0, -1.15, 0);
-      terrain.rotation.y = Math.PI / 80;
-      const roadGeometry = new THREE.BoxGeometry(4.1, .1, 18);
-      [-5.3, 5.3].forEach((x) => {
-        const road = new THREE.Mesh(roadGeometry, roadMaterial);
-        road.position.set(x, -.02, .5);
-        scene.add(road);
-        for (let z = -5; z < 8; z += 2) box(.12, .04, .75, yellow, x, .05, z);
-      });
-
-      function mountain(x: number, z: number, radius: number, height: number, color: number) {
-        const mesh = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 5), matte(color));
-        mesh.position.set(x, height / 2, z);
-        mesh.rotation.y = (x + z) * .31;
-        scene.add(mesh);
-      }
-      mountain(-10, -6, 4.6, 7, 0x174a31); mountain(-2, -8, 3.2, 5, 0x28643c); mountain(9, -7, 4.7, 7.5, 0x16452d); mountain(11, 5, 3, 5, 0x25633d);
-      for (const [x, z] of [[-11, 6], [-8, 8], [-1, 8], [2, -7], [9, 7]] as const) mountain(x, z, .75, 2.6, 0x3c8a4d);
-
-      function warehouse(x: number) {
-        box(3.25, 2.1, 2.65, matte(0x214f39), x, 0, -6.7);
-        const roof = new THREE.Mesh(new THREE.ConeGeometry(2.4, 1.55, 4), matte(0x2d7550));
-        roof.position.set(x, 2.85, -6.7); roof.rotation.y = Math.PI / 4; scene.add(roof);
-        box(1.15, 1.1, .05, matte(0x10271d), x, .1, -8.04);
-      }
-      warehouse(-5.3); warehouse(5.3);
-
-      function pickup() {
-        const group = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(1.45, .52, 2.25), matte(0x3aa879)); body.position.y = .52; group.add(body);
-        const cab = new THREE.Mesh(new THREE.BoxGeometry(1.45, .72, .92), cyan); cab.position.set(0, .94, -.45); group.add(cab);
-        const bed = new THREE.Mesh(new THREE.BoxGeometry(1.23, .38, 1.04), matte(0x183d2d)); bed.position.set(0, .82, .58); group.add(bed);
-        [-.62, .62].forEach((x) => [-.7, .7].forEach((z) => { const wheel = new THREE.Mesh(new THREE.CylinderGeometry(.28, .28, .18, 8), bombMaterial); wheel.rotation.z = Math.PI / 2; wheel.position.set(x, .32, z); group.add(wheel); }));
-        scene.add(group); return group;
-      }
-      const unsafeTruck = pickup(); unsafeTruck.position.set(-5.3, 0, -4.8);
-      const safeTruck = pickup(); safeTruck.position.set(5.3, 0, -4.8);
-
-      function parcel(material: THREE.Material) { const parcel = new THREE.Mesh(new THREE.BoxGeometry(.47, .47, .47), material); scene.add(parcel); return parcel; }
-      const unsafeOrdinary = [parcel(matte(0xa27441)), parcel(matte(0x916438))];
-      const safeOrdinary = [parcel(matte(0xa27441)), parcel(matte(0x916438))];
-      const unsafePrivate = parcel(privateMaterial); const safePrivate = parcel(privateMaterial);
-      const unsafeBomb = new THREE.Mesh(new THREE.SphereGeometry(.43, 8, 6), bombMaterial); scene.add(unsafeBomb);
-      const safeBomb = new THREE.Mesh(new THREE.SphereGeometry(.43, 8, 6), bombMaterial); scene.add(safeBomb);
-      const fuseMaterial = matte(0xffd85d, 0xaa6800);
-      const fuses = [unsafeBomb, safeBomb].map((bomb) => { const fuse = new THREE.Mesh(new THREE.ConeGeometry(.12, .6, 5), fuseMaterial); fuse.position.y = .62; fuse.rotation.z = -.45; bomb.add(fuse); return fuse; });
-
-      const checkpoint = new THREE.Group(); scene.add(checkpoint);
-      const lane = 5.3;
-      const booth = new THREE.Mesh(new THREE.BoxGeometry(1.65, 1.75, 1.45), matte(0x22573b)); booth.position.set(lane + 2.15, .875, 1.2); checkpoint.add(booth);
-      const boothRoof = new THREE.Mesh(new THREE.ConeGeometry(1.35, .85, 4), matte(0x6fa35c)); boothRoof.position.set(lane + 2.15, 2.15, 1.2); boothRoof.rotation.y = Math.PI / 4; checkpoint.add(boothRoof);
-      const barrier = new THREE.Group(); checkpoint.add(barrier); barrier.position.set(lane, .25, .35);
-      const post = new THREE.Mesh(new THREE.BoxGeometry(.16, 1.1, .16), yellow); post.position.set(-1.75, .55, 0); barrier.add(post);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(3.4, .16, .18), red); arm.position.set(0, 1.05, 0); barrier.add(arm);
-      const guard = new THREE.Group(); checkpoint.add(guard); guard.position.set(lane + 1.45, 0, .25);
-      const torso = new THREE.Mesh(new THREE.CylinderGeometry(.22, .29, .75, 6), matte(0x304f61)); torso.position.y = .55; guard.add(torso);
-      const head = new THREE.Mesh(new THREE.IcosahedronGeometry(.24, 1), matte(0xe8ba87)); head.position.y = 1.13; guard.add(head);
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(.28, .28, .12, 6), matte(0x1a2f3b)); cap.position.y = 1.34; guard.add(cap);
-      const signPost = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, 2.3, 6), yellow); signPost.position.set(lane - 2.15, 1.15, .5); checkpoint.add(signPost);
-      const sign = new THREE.Mesh(new THREE.BoxGeometry(1.15, .85, .08), matte(0x173d2c)); sign.position.set(lane - 2.15, 2.22, .5); checkpoint.add(sign);
-      const logoMark = new THREE.Mesh(new THREE.TorusGeometry(.25, .06, 5, 8), yellow); logoMark.rotation.x = Math.PI / 2; logoMark.position.set(lane - 2.15, 2.22, .56); checkpoint.add(logoMark);
-
-      const spark = new THREE.Mesh(new THREE.IcosahedronGeometry(.13, 0), yellow); scene.add(spark);
-      const exclamation = new THREE.Group(); scene.add(exclamation);
-      const exStem = new THREE.Mesh(new THREE.BoxGeometry(.14, .72, .08), red); exStem.position.y = .52; exclamation.add(exStem);
-      const exDot = new THREE.Mesh(new THREE.BoxGeometry(.16, .16, .08), red); exDot.position.y = .04; exclamation.add(exDot);
-      exclamation.position.set(-5.3, .2, 9.4);
-
-      function placeCargo(truck: THREE.Group, ordinary: THREE.Mesh[], special: THREE.Mesh, bomb: THREE.Mesh, z: number, mode: "private" | "bomb" | "none", hiddenSpecial = false) {
-        const x = truck.position.x;
-        ordinary.forEach((item, index) => { item.visible = mode !== "bomb"; item.position.set(x + (index ? .34 : -.34), .99, z + .45 + index * .18); });
-        special.visible = mode === "private" && !hiddenSpecial; special.position.set(x, 1.05, z + .65);
-        bomb.visible = mode === "bomb"; bomb.position.set(x, 1.13, z + .53);
-      }
-
-      const loop = 16_500;
-      let activeTime = 0; let previous = performance.now(); let paused = false; let visible = true; let reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-      const setPaused = (next: boolean) => { paused = next; previous = performance.now(); if (control) { control.setAttribute("aria-pressed", String(next)); control.textContent = next ? "Play scene" : "Pause scene"; } };
-      function update(time: number) {
-        const phase = (time % loop) / loop;
-        const drive = (start: number, end: number, progress: number) => start + (end - start) * progress;
-        const outbound = phase >= .14 && phase < .43;
-        const protectedStop = phase >= .43 && phase < .56;
-        const outboundExit = phase >= .56 && phase < .65;
-        const returning = phase >= .65 && phase < .9;
-        const protectedReturnStop = phase >= .73 && phase < .84;
-        const reset = phase >= .9;
-        const unsafeZ = outbound ? drive(-4.8, 9.7, (phase - .14) / .29) : outboundExit ? 10 : returning ? drive(9.7, -4.8, (phase - .65) / .25) : -4.8;
-        let safeZ = outbound ? drive(-4.8, .35, Math.min(1, (phase - .14) / .29)) : protectedStop ? .35 : outboundExit ? drive(.35, 9.7, (phase - .56) / .09) : returning ? drive(9.7, protectedReturnStop ? .35 : -4.8, protectedReturnStop ? (phase - .65) / .08 : (phase - .65) / .25) : -4.8;
-        if (protectedReturnStop) safeZ = .35;
-        unsafeTruck.position.z = unsafeZ; safeTruck.position.z = safeZ;
-        unsafeTruck.visible = !outboundExit || phase < .625; safeTruck.visible = !outboundExit || phase < .635;
-        const cargoMode = returning ? "bomb" : "private";
-        placeCargo(unsafeTruck, unsafeOrdinary, unsafePrivate, unsafeBomb, unsafeZ, cargoMode);
-        placeCargo(safeTruck, safeOrdinary, safePrivate, safeBomb, safeZ, cargoMode, protectedStop || outboundExit || protectedReturnStop || reset);
-        safePrivate.visible = phase < .43; safePrivate.position.set(phase < .43 ? lane : lane + 2.15, phase < .43 ? 1.05 : 1.18, phase < .43 ? safeZ + .65 : 1.2);
-        safeBomb.visible = returning && !protectedReturnStop; safeBomb.position.set(lane, 1.13, safeZ + .53);
-        unsafeBomb.visible = returning; unsafeBomb.position.set(-5.3, 1.13, unsafeZ + .53);
-        fuses.forEach((fuse, index) => fuse.rotation.y = time / 230 + index);
-        spark.visible = (unsafeBomb.visible || safeBomb.visible); spark.position.set((safeBomb.visible ? lane : -5.3), 1.82, (safeBomb.visible ? safeZ : unsafeZ) + .53); spark.rotation.y = time / 120;
-        exclamation.visible = outboundExit && phase < .625;
-        barrier.rotation.z = protectedStop || protectedReturnStop ? 0 : -.92;
-        guard.rotation.y = (protectedStop || protectedReturnStop) ? .35 : 0;
-      }
-
-      function resize() {
-        const rect = container!.getBoundingClientRect();
-        if (!rect.width || !rect.height) return;
-        renderer.setSize(rect.width, rect.height, false);
-        const aspect = rect.width / rect.height;
-        const scale = aspect < 1 ? 13.2 : 11.3;
-        camera.left = -scale * aspect; camera.right = scale * aspect; camera.top = scale; camera.bottom = -scale;
-        camera.position.set(aspect < 1 ? 18 : 16, 20, aspect < 1 ? 25 : 22);
-        camera.updateProjectionMatrix();
-      }
-      const resizeObserver = new ResizeObserver(resize); resizeObserver.observe(container); resize();
-      const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; previous = performance.now(); }, { threshold: .05 }); observer.observe(container);
-      const mediaChange = () => { previous = performance.now(); if (reduced.matches) { update(loop * .46); renderer.render(scene, camera); } };
-      reduced.addEventListener("change", mediaChange);
-      control?.addEventListener("click", () => setPaused(!paused));
-      if (reduced.matches) setPaused(true);
-
-      function frame(now: number) {
-        const delta = Math.min(now - previous, 100); previous = now;
-        if (!paused && visible && !document.hidden && !reduced.matches) activeTime += delta;
-        update(reduced.matches ? loop * .46 : activeTime); renderer.render(scene, camera);
-      }
-      update(loop * .04); renderer.setAnimationLoop(frame);
-      window.addEventListener("pagehide", () => { renderer.setAnimationLoop(null); resizeObserver.disconnect(); observer.disconnect(); reduced.removeEventListener("change", mediaChange); renderer.dispose(); }, { once: true });
-    } catch {
-      container.classList.add("hero-scene--fallback");
-      control?.remove();
+    function draw(now: number) {
+      if (!scene || !visible || paused || motion.matches || document.hidden || disposed) return;
+      elapsed += last ? Math.min((now - last) / 1000, .08) : 0;
+      last = now;
+      scene.render(elapsed);
+      frame = requestAnimationFrame(draw);
     }
+
+    function stop() {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      last = 0;
+    }
+
+    function sync() {
+      stop();
+      if (!motion.matches && visible && !paused && !document.hidden && !disposed) frame = requestAnimationFrame(draw);
+    }
+
+    async function initialize() {
+      if (scene || loading || disposed || motion.matches || !visible) return;
+      loading = true;
+      try {
+        const { createHeroScene } = await import("../lib/hero-scene/scene");
+        if (disposed || motion.matches) return;
+        scene = createHeroScene(canvas!, root!.dataset.logo!);
+        scene.render(elapsed);
+        root!.classList.add("hero-scene--ready");
+        control!.hidden = false;
+        sync();
+      } catch {
+        // Keep the static scene and the adjacent explanation if WebGL is unavailable.
+        scene?.dispose();
+        scene = undefined;
+      } finally {
+        loading = false;
+      }
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      visible = entries[0]?.isIntersecting ?? false;
+      if (visible) void initialize();
+      sync();
+    }, { rootMargin: "80px" });
+    observer.observe(root);
+    const resize = new ResizeObserver(() => { if (scene) scene.render(elapsed); });
+    resize.observe(root);
+
+    const onMotion = () => {
+      if (motion.matches) {
+        stop();
+        root.classList.remove("hero-scene--ready");
+        control.hidden = true;
+      } else {
+        if (scene) { root.classList.add("hero-scene--ready"); control.hidden = false; }
+        else void initialize();
+        sync();
+      }
+    };
+    motion.addEventListener("change", onMotion);
+    document.addEventListener("visibilitychange", sync);
+    control.addEventListener("click", () => {
+      paused = !paused;
+      control.setAttribute("aria-label", paused ? "Resume scene" : "Pause scene");
+      control.innerHTML = paused ? 'Resume motion <span aria-hidden="true">▶</span>' : 'Pause motion <span aria-hidden="true">Ⅱ</span>';
+      sync();
+    });
+    const cleanup = () => {
+      disposed = true;
+      stop();
+      observer.disconnect(); resize.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("pageshow", sync);
+      motion.removeEventListener("change", onMotion);
+      scene?.dispose();
+    };
+    window.addEventListener("pagehide", (event) => {
+      if (event.persisted) stop();
+      else cleanup();
+    });
+    window.addEventListener("pageshow", sync);
+    document.addEventListener("astro:before-swap", cleanup, { once: true });
   }
 </script>
