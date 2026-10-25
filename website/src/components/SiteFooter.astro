@@ -1,7 +1,8 @@
 ---
 import { version } from "../lib/version";
+import { withBase } from "../lib/with-base";
 ---
 
 <footer class="site-footer">
-  <div class="shell site-footer__inner"><strong>Sireno<span>RELAY</span></strong><p>Default deny, by design.</p><small>v{version}</small></div>
+  <div class="shell site-footer__inner"><strong>Sireno<span>RELAY</span></strong><p>Default deny, by design.</p><a href={withBase("/attributions")}>3D asset attributions</a><small>v{version}</small></div>
 </footer>

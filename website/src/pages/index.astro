@@ -1,10 +1,11 @@
 ---
 import Button from "../components/Button.astro";
 import GitHubStarButton from "../components/GitHubStarButton.astro";
+import HeroScene from "../components/HeroScene.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import MailBoundaryDiagram from "../components/MailBoundaryDiagram.astro";
-import RelayIsometricDiagram from "../components/RelayIsometricDiagram.astro";
+import RouteComparison from "../components/RouteComparison.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
 import { withBase } from "../lib/with-base";
 import { version } from "../lib/version";
@@ -15,7 +16,7 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
 <SiteLayout title="SirenoRELAY — constrained email for agents" description="Give agents narrowly scoped, policy-filtered email access without upstream credentials.">
   <SiteHeader home />
   <main>
-    <section class="hero hero--stitch">
+    <section class="hero hero--stitch hero--scene">
       <div class="hero-aura" aria-hidden="true"></div>
       <div class="hero__inner shell">
         <div class="hero-copy">
@@ -26,9 +27,10 @@ const setupPrompt = "First install the SirenoRELAY setup skill with `npx skills 
           <GitHubStarButton />
         </div>
       </div>
+      <HeroScene />
     </section>
 
-    <RelayIsometricDiagram />
+    <RouteComparison />
 
     <section id="comparison" class="comparison-section"><div class="shell"><MailBoundaryDiagram /></div></section>
 

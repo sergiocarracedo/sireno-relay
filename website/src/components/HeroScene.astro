@@ -1,0 +1,130 @@
+---
+import { withBase } from "../lib/with-base";
+import roadUrl from "../assets/3d/road-poly-google.glb?url";
+import carUrl from "../assets/3d/pickup-truck.glb?url";
+import houseUrl from "../assets/3d/bungalow-house.glb?url";
+import officerUrl from "../assets/3d/male-officer.glb?url";
+import boxUrl from "../assets/3d/box-kay-lousberg.glb?url";
+import specialBoxUrl from "../assets/3d/cube-exclamation.glb?url";
+import bombUrl from "../assets/3d/bomb-quaternius.glb?url";
+import towerUrl from "../assets/3d/guard-tower.glb?url";
+import rockUrl from "../assets/3d/railway-rock-cluster.glb?url";
+import spruceUrl from "../assets/3d/spruce-tree.glb?url";
+import oakUrl from "../assets/3d/tree-oak-01.glb?url";
+---
+
+<div class="hero-scene" data-hero-scene data-logo={withBase("/logo.png")} data-road={roadUrl} data-car={carUrl} data-house={houseUrl} data-officer={officerUrl} data-box={boxUrl} data-special-box={specialBoxUrl} data-bomb={bombUrl} data-tower={towerUrl} data-rock={rockUrl} data-spruce={spruceUrl} data-oak={oakUrl}>
+  <div class="hero-scene__art" aria-hidden="true">
+    <picture class="hero-scene__poster">
+      <source media="(max-width: 680px)" srcset={withBase("/hero-scene-mobile.webp")} />
+      <img src={withBase("/hero-scene-desktop.webp")} width="1720" height="610" alt="" />
+    </picture>
+    <canvas class="hero-scene__canvas" data-hero-canvas></canvas>
+    <span class="hero-scene__label hero-scene__label--risk"><i></i> NO POLICY · EXPOSED</span>
+    <span class="hero-scene__label hero-scene__label--safe"><i></i> SIRENORELAY · PROTECTED</span>
+  </div>
+  <button class="hero-scene__control" data-hero-control type="button" aria-label="Pause scene" hidden>Pause motion <span aria-hidden="true">Ⅱ</span></button>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-hero-scene]");
+  const canvas = root?.querySelector<HTMLCanvasElement>("[data-hero-canvas]");
+  const control = root?.querySelector<HTMLButtonElement>("[data-hero-control]");
+
+  if (root && canvas && control) {
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let scene: Awaited<ReturnType<typeof import("../lib/hero-scene/scene")["createHeroScene"]>> | undefined;
+    let elapsed = 4.8;
+    let frame = 0;
+    let last = 0;
+    let visible = false;
+    let paused = false;
+    let disposed = false;
+    let loading = false;
+
+    function draw(now: number) {
+      if (!scene || !visible || paused || motion.matches || document.hidden || disposed) return;
+      elapsed += last ? Math.min((now - last) / 1000, .08) : 0;
+      last = now;
+      scene.render(elapsed);
+      frame = requestAnimationFrame(draw);
+    }
+
+    function stop() {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      last = 0;
+    }
+
+    function sync() {
+      stop();
+      if (!motion.matches && visible && !paused && !document.hidden && !disposed) frame = requestAnimationFrame(draw);
+    }
+
+    async function initialize() {
+      if (scene || loading || disposed || motion.matches || !visible) return;
+      loading = true;
+      try {
+        const { createHeroScene } = await import("../lib/hero-scene/scene");
+        if (disposed || motion.matches) return;
+        scene = await createHeroScene(canvas!, root!.dataset.logo!, root!.dataset.road!, root!.dataset.car!, root!.dataset.house!, root!.dataset.officer!, root!.dataset.box!, root!.dataset.specialBox!, root!.dataset.bomb!, root!.dataset.tower!, {
+          rock: root!.dataset.rock!, spruce: root!.dataset.spruce!, oak: root!.dataset.oak!,
+        });
+        scene.render(elapsed);
+        root!.classList.add("hero-scene--ready");
+        control!.hidden = false;
+        sync();
+      } catch {
+        // Keep the static scene and the adjacent explanation if WebGL is unavailable.
+        scene?.dispose();
+        scene = undefined;
+      } finally {
+        loading = false;
+      }
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      visible = entries[0]?.isIntersecting ?? false;
+      if (visible) void initialize();
+      sync();
+    }, { rootMargin: "80px" });
+    observer.observe(root);
+    const resize = new ResizeObserver(() => { if (scene) scene.render(elapsed); });
+    resize.observe(root);
+
+    const onMotion = () => {
+      if (motion.matches) {
+        stop();
+        root.classList.remove("hero-scene--ready");
+        control.hidden = true;
+      } else {
+        if (scene) { root.classList.add("hero-scene--ready"); control.hidden = false; }
+        else void initialize();
+        sync();
+      }
+    };
+    motion.addEventListener("change", onMotion);
+    document.addEventListener("visibilitychange", sync);
+    control.addEventListener("click", () => {
+      paused = !paused;
+      control.setAttribute("aria-label", paused ? "Resume scene" : "Pause scene");
+      control.innerHTML = paused ? 'Resume motion <span aria-hidden="true">▶</span>' : 'Pause motion <span aria-hidden="true">Ⅱ</span>';
+      sync();
+    });
+    const cleanup = () => {
+      disposed = true;
+      stop();
+      observer.disconnect(); resize.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("pageshow", sync);
+      motion.removeEventListener("change", onMotion);
+      scene?.dispose();
+    };
+    window.addEventListener("pagehide", (event) => {
+      if (event.persisted) stop();
+      else cleanup();
+    });
+    window.addEventListener("pageshow", sync);
+    document.addEventListener("astro:before-swap", cleanup, { once: true });
+  }
+</script>

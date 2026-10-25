@@ -1,4 +1,4 @@
-@import url("./relay-isometric.css");
+@import url("./hero-scene.css");
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root { color-scheme: light dark; --bg: light-dark(#f3fcf4, #101814); --surface: light-dark(#fff, #17211b); --surface-soft: light-dark(#eaf4ed, #1d2b23); --ink: light-dark(#151d19, #edf7ef); --muted: light-dark(#607066, #a7b7aa); --line: light-dark(#d9e4dc, #314139); --moss: light-dark(#1b3b2b, #bfe4c8); --lime: #d2f824; --teal: #2dd4bf; --danger: #c93b35; --shadow: 0 18px 48px rgba(15, 34, 22, .09); font-family: Geist, sans-serif; background: var(--bg); color: var(--ink); }
