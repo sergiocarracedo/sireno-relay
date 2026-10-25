@@ -1,0 +1,14 @@
+.github/workflows/auto-merge-release-please.yml
+  h_f90ee31b03fc41 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e1ba2680ccce6ec28b3e6278aab1a3826874799c",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
