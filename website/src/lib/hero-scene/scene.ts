@@ -41,8 +41,7 @@ function tree(parent: THREE.Object3D, x: number, z: number, size = 1) {
   cone(parent, .48 * size, 1.16 * size, 5, materials.grass, x, 1.95 * size, z);
 }
 
-async function addCountrysideTerrain(scene: THREE.Scene, url: string) {
-  const gltf = await new GLTFLoader().loadAsync(url);
+function addCountrysideTerrain(scene: THREE.Scene, source: THREE.Object3D) {
   const terrain = new THREE.Group();
   terrain.name = "countryside-grass-tile-grid";
   scene.add(terrain);
@@ -50,11 +49,20 @@ async function addCountrysideTerrain(scene: THREE.Scene, url: string) {
   const step = 4 * scale;
   // A 15×15 field extends beyond the camera crop, so every visible edge stays terrain.
   for (let row = -7; row <= 7; row++) for (let column = -7; column <= 7; column++) {
-    const tile = gltf.scene.clone(true);
+    const tile = source.clone(true);
     tile.scale.setScalar(scale);
     tile.position.set(column * step, -.225, row * step);
     tile.rotation.y = ((row * 5 + column * 3 + 8) % 4) * Math.PI / 2;
     terrain.add(tile);
+  }
+}
+
+function addStraightRoad(parent: THREE.Object3D, source: THREE.Object3D) {
+  for (const z of [-5, -1, 3, 7]) {
+    const segment = source.clone(true);
+    segment.scale.set(.82, 1, 1);
+    segment.position.set(0, -.07, z);
+    parent.add(segment);
   }
 }
 
@@ -112,12 +120,11 @@ type Lane = {
   exclamation?: THREE.Group;
 };
 
-function buildLane(scene: THREE.Scene, x: number, protectedRoute: boolean, logoUrl: string): Lane {
+function buildLane(scene: THREE.Scene, x: number, protectedRoute: boolean, logoUrl: string, roadTile: THREE.Object3D): Lane {
   const root = new THREE.Group();
   root.position.x = x;
   scene.add(root);
-  cuboid(root, 3.25, .07, 14.6, materials.road, 0, .035, .35);
-  for (let z = -4; z < 7; z += 2.5) cuboid(root, .08, .025, .74, materials.stripe, 0, .09, z);
+  addStraightRoad(root, roadTile);
   for (const [tx, tz, size] of [[-3.5, -5.3, 1.1], [3.65, -5.7, 1.25], [-3.55, 3, .95], [3.65, 5.2, 1.15]] as const) tree(root, tx, tz, size);
   for (const [mx, mz, size] of [[-3.3, -2.3, 2.15], [3.5, 3.4, 1.8]] as const) {
     const mountain = cone(root, size, size * 1.5, 5, materials.meadow, mx, size * .72, mz);
@@ -184,7 +191,7 @@ function positionCargo(object: THREE.Group, where: string, truckZ: number, x: nu
   if (where === "handoff") object.position.set(1.06, 1.62, .35);
 }
 
-export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string, terrainUrl: string) {
+export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string, terrainUrl: string, roadUrl: string) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "low-power" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -192,9 +199,11 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
   scene.add(new THREE.HemisphereLight(0xeaffdd, 0x27452f, 2.9));
   const sunlight = new THREE.DirectionalLight(0xffefd6, 2.4);
   sunlight.position.set(-6, 15, 9); scene.add(sunlight);
-  await addCountrysideTerrain(scene, terrainUrl);
-  const unsafe = buildLane(scene, -5.3, false, logoUrl);
-  const safe = buildLane(scene, 5.3, true, logoUrl);
+  const loader = new GLTFLoader();
+  const [terrain, road] = await Promise.all([loader.loadAsync(terrainUrl), loader.loadAsync(roadUrl)]);
+  addCountrysideTerrain(scene, terrain.scene);
+  const unsafe = buildLane(scene, -5.3, false, logoUrl, road.scene);
+  const safe = buildLane(scene, 5.3, true, logoUrl, road.scene);
   const camera = new THREE.OrthographicCamera(-15, 15, 7, -7, .1, 100);
   camera.position.set(16, 23, 27);
   camera.lookAt(0, .3, 0);
@@ -270,7 +279,7 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
       camera.left = -span / 2; camera.right = span / 2;
       camera.top = span / (2 * aspect); camera.bottom = -camera.top;
       camera.position.set(16, 23, 27);
-      camera.lookAt(0, .3, 0);
+      camera.lookAt(0, 8.5, 0);
       camera.updateProjectionMatrix();
       renderer.render(scene, camera);
     }

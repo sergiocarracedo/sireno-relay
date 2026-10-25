@@ -2,7 +2,7 @@
 import { withBase } from "../lib/with-base";
 ---
 
-<div class="hero-scene" data-hero-scene data-logo={withBase("/logo.png")} data-terrain={withBase("/models/countryside-grass-tile.glb")}>
+<div class="hero-scene" data-hero-scene data-logo={withBase("/logo.png")} data-terrain={withBase("/models/countryside-grass-tile.glb")} data-road={withBase("/models/road-straight.glb")}>
   <div class="hero-scene__art" aria-hidden="true">
     <img class="hero-scene__poster hero-scene__poster--risk" src={withBase("/hero-scene-poster.svg")} width="1200" height="540" alt="" />
     <img class="hero-scene__poster hero-scene__poster--safe" src={withBase("/hero-scene-poster.svg")} width="1200" height="540" alt="" />
@@ -56,7 +56,7 @@ import { withBase } from "../lib/with-base";
       try {
         const { createHeroScene } = await import("../lib/hero-scene/scene");
         if (disposed || motion.matches) return;
-        scene = await createHeroScene(canvas!, root!.dataset.logo!, root!.dataset.terrain!);
+        scene = await createHeroScene(canvas!, root!.dataset.logo!, root!.dataset.terrain!, root!.dataset.road!);
         scene.render(elapsed);
         root!.classList.add("hero-scene--ready");
         control!.hidden = false;
