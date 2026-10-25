@@ -1,0 +1,14 @@
+website/src/lib/hero-scene/scene.ts
+  h_f90ee31b03fc41 347-350,487-489,501,508,512-516,519-520,522-523,534-535,538-543,548-549,551-552
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ea6f170528dd5f953d285fe3b49102758e9caaf9",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
