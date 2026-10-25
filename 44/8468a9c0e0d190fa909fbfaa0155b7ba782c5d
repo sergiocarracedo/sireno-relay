@@ -1,0 +1,16 @@
+.github/workflows/publish-website.yml
+  h_f90ee31b03fc41 25-28
+website/src/layouts/SiteLayout.astro
+  h_f90ee31b03fc41 3,14-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "448468a9c0e0d190fa909fbfaa0155b7ba782c5d",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
