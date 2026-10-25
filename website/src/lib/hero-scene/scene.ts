@@ -80,10 +80,24 @@ function addScenery(scene: THREE.Scene, models: { rock: THREE.Object3D; spruce: 
   place(models.rock, -13, -9, .8, .331, .5);
   place(models.rock, 11, 8, .65, .331, 1.9);
   place(models.rock, -2, 12, .55, .331, 2.8);
-  place(models.spruce, -13, 6, .42, 3.104, .3);
-  place(models.spruce, 12, -6, .34, 3.104, 2.3);
-  place(models.oak, -10, -2, .48, 2.176, 1.1);
-  place(models.oak, 10, 3, .38, 2.176, 2.7);
+
+  // A dense band along the far edge fills the top of the hero like a forest backdrop.
+  const screenRight = new THREE.Vector2(.86, -.51);
+  const awayFromCamera = new THREE.Vector2(-.51, -.86);
+  for (let row = 0; row < 12; row++) {
+    for (let column = 0; column < 43; column++) {
+      const seed = row * 37 + column * 19;
+      const across = (column - 21) * 1.82 + (row % 2) * .91 + Math.sin(seed * 2.1) * .32;
+      const depth = 29 + row * 1.85 + Math.cos(seed * 1.7) * .3;
+      const x = screenRight.x * across + awayFromCamera.x * depth;
+      const z = screenRight.y * across + awayFromCamera.y * depth;
+      const oak = seed % 6 === 0;
+      const model = oak ? models.oak : models.spruce;
+      const scale = .48 + ((seed * 7) % 11) * .04;
+      const rotation = ((seed * 137.5) % 360) * Math.PI / 180;
+      place(model, x, z, scale, oak ? 2.176 : 3.104, rotation);
+    }
+  }
 }
 
 function addStraightRoad(parent: THREE.Object3D, source: THREE.Object3D) {
