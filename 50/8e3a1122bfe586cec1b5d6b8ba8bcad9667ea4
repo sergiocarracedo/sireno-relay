@@ -1,0 +1,18 @@
+cli/internal/onboard/onboard.go
+  h_f90ee31b03fc41 65,214-215,219,223,227,231,235,239-245,253-257,275-287,326,332-334,343-367
+cli/internal/onboard/onboard_test.go
+  h_f90ee31b03fc41 9,66-100
+cli/main.go
+  h_f90ee31b03fc41 234,238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "508e3a1122bfe586cec1b5d6b8ba8bcad9667ea4",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
