@@ -1,0 +1,14 @@
+website/src/components/RelayIsometricDiagram.astro
+  h_f90ee31b03fc41 37,78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d6c41f8bf97fd6b45367c3b26a5aa21a60d6bdde",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
