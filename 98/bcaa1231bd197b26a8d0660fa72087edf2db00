@@ -1,0 +1,42 @@
+website/package-lock.json
+  h_f90ee31b03fc41 8-10,12,155-161,1681-1687,1742-1763,1771-1777,2680-2686,3414-3420,4857-4862
+website/package.json
+  h_f90ee31b03fc41 5-16
+website/public/draco/draco_wasm_wrapper.js
+  h_f90ee31b03fc41 1-116
+website/src/components/HeroScene.astro
+  h_f90ee31b03fc41 1-130
+website/src/components/RelayIsometricDiagram.astro
+  h_f90ee31b03fc41 70-76
+website/src/components/RouteComparison.astro
+  h_f90ee31b03fc41 1-14
+website/src/components/SiteFooter.astro
+  h_f90ee31b03fc41 3,7
+website/src/lib/hero-scene/scene.ts
+  h_f90ee31b03fc41 1-576
+website/src/lib/hero-scene/timeline.test.ts
+  h_f90ee31b03fc41 1-127
+website/src/lib/hero-scene/timeline.ts
+  h_f90ee31b03fc41 1-88
+website/src/pages/attributions.astro
+  h_f90ee31b03fc41 1-75
+website/src/pages/index.astro
+  h_f90ee31b03fc41 4,8,19,25,30,33,50-54
+website/src/styles/hero-scene.css
+  h_f90ee31b03fc41 1-53
+website/src/styles/relay-isometric.css
+  h_f90ee31b03fc41 128-130,139-152
+website/src/styles/site.css
+  h_f90ee31b03fc41 1,37-46,66-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "98bcaa1231bd197b26a8d0660fa72087edf2db00",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
