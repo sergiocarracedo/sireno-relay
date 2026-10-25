@@ -1,0 +1,18 @@
+.release-please-manifest.json
+  h_f90ee31b03fc41 2
+CHANGELOG.md
+  h_f90ee31b03fc41 3-10
+VERSION
+  h_f90ee31b03fc41 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2b9bd54200b3fb90eab8cead47a85847e837d0f1",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
