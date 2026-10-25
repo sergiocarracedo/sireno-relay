@@ -1,0 +1,18 @@
+.gitignore
+  h_f90ee31b03fc41 13
+website/src/pages/index.astro
+  h_f90ee31b03fc41 73-85
+website/src/styles/site.css
+  h_f90ee31b03fc41 26-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3100a799767c242478c06698c1961f560f048470",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
