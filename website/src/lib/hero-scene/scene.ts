@@ -46,11 +46,12 @@ function terrainElevation(x: number, z: number) {
 function addFacetedGround(scene: THREE.Scene) {
   // Adapted from the elevation-mesh approach: a coarse shared-vertex grid,
   // displaced by elevation then shaded flat with one material.
-  const segments = 16;
-  const geometry = new THREE.PlaneGeometry(74, 74, segments, segments);
+  const extent = 148;
+  const segments = 36;
+  const geometry = new THREE.PlaneGeometry(extent, extent, segments, segments);
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.getAttribute("position");
-  const step = 74 / segments;
+  const step = extent / segments;
   for (let row = 0; row <= segments; row++) for (let column = 0; column <= segments; column++) {
     const index = row * (segments + 1) + column;
     const isEdge = row === 0 || row === segments || column === 0 || column === segments;
@@ -63,7 +64,7 @@ function addFacetedGround(scene: THREE.Scene) {
   }
   const facetedGeometry = geometry.toNonIndexed();
   facetedGeometry.computeVertexNormals();
-  const ground = new THREE.Mesh(facetedGeometry, new THREE.MeshLambertMaterial({ color: 0x2a654b, flatShading: true }));
+  const ground = new THREE.Mesh(facetedGeometry, new THREE.MeshLambertMaterial({ color: 0x347a55, flatShading: true }));
   ground.name = "dark-faceted-ground";
   scene.add(ground);
 }
