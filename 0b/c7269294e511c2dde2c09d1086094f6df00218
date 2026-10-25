@@ -1,0 +1,20 @@
+website/src/components/RelayIsometricDiagram.astro
+  h_f90ee31b03fc41 70-76
+website/src/pages/index.astro
+  h_f90ee31b03fc41 24,48-52
+website/src/styles/relay-isometric.css
+  h_f90ee31b03fc41 128-130,139-152
+website/src/styles/site.css
+  h_f90ee31b03fc41 37-46,66-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0bc7269294e511c2dde2c09d1086094f6df00218",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
