@@ -2,10 +2,10 @@
 .hero--scene .hero__inner { position: relative; z-index: 2; pointer-events: none; }
 .hero--scene .hero__inner a,.hero--scene .hero__inner button { pointer-events: auto; }
 .hero--scene .hero-copy { margin-bottom: 0; }
-.hero--scene .hero-copy { color: #173827; }
-.hero--scene .hero-copy h1,.hero--scene .hero-copy .lede { text-shadow: 0 1px 18px rgb(244 255 239 / .84); }
-.hero--scene .hero-copy .lede { color: #315842; }
-.hero--scene .hero-copy .eyebrow--pill { border-color: rgb(27 59 43 / .28); background: rgb(244 255 239 / .72); color: #234c35; }
+.hero--scene .hero-copy { color: #f2f8eb; }
+.hero--scene .hero-copy h1,.hero--scene .hero-copy .lede { text-shadow: 0 2px 18px rgb(7 25 18 / .68); }
+.hero--scene .hero-copy .lede { color: #d1e1d5; }
+.hero--scene .hero-copy .eyebrow--pill { border-color: rgb(236 255 231 / .38); background: rgb(12 39 29 / .68); color: #e7f5de; }
 .hero-scene { position: absolute; inset: 0; z-index: 0; width: 100%; overflow: hidden; }
 .hero-scene__art { position: absolute; inset: 0; overflow: hidden; }
 .hero-scene__art::after { content: ""; position: absolute; z-index: 1; inset: -13rem -24vw auto; height: 46rem; border-radius: 48%; background: radial-gradient(ellipse at 22% 44%, rgb(94 215 158 / .43) 0 12%, transparent 44%), radial-gradient(ellipse at 72% 24%, rgb(210 248 36 / .43) 0 9%, transparent 41%), radial-gradient(ellipse at 53% 67%, rgb(69 143 83 / .38) 0 18%, transparent 57%); background-size: 150% 145%, 140% 135%, 165% 150%; background-position: 0% 50%, 100% 20%, 52% 100%; filter: blur(72px); opacity: .9; pointer-events: none; animation: hero-gradient-drift 20s ease-in-out infinite alternate; }

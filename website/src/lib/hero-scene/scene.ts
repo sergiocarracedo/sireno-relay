@@ -35,20 +35,43 @@ function cone(parent: THREE.Object3D, r: number, h: number, sides: number, mat: 
   return mesh;
 }
 
-function addCountrysideTerrain(scene: THREE.Scene, source: THREE.Object3D) {
-  const terrain = new THREE.Group();
-  terrain.name = "countryside-grass-tile-grid";
-  scene.add(terrain);
-  const scale = 1.2;
-  const step = 4 * scale;
-  // A 25×25 field extends past the taller hero camera crop in every direction.
-  for (let row = -12; row <= 12; row++) for (let column = -12; column <= 12; column++) {
-    const tile = source.clone(true);
-    tile.scale.setScalar(scale);
-    tile.position.set(column * step, -.225, row * step);
-    tile.rotation.y = ((row * 5 + column * 3 + 8) % 4) * Math.PI / 2;
-    terrain.add(tile);
+function addFacetedGround(scene: THREE.Scene) {
+  const geometry = new THREE.PlaneGeometry(74, 74, 28, 28).toNonIndexed();
+  geometry.rotateX(-Math.PI / 2);
+  const positions = geometry.getAttribute("position");
+  const colors = new Float32Array(positions.count * 3);
+  const shades = [new THREE.Color(0x183f32), new THREE.Color(0x205341), new THREE.Color(0x28664c), new THREE.Color(0x12352a)];
+  for (let index = 0; index < positions.count; index += 3) {
+    const shade = shades[(index / 3 * 17 + Math.floor(index / 31)) % shades.length];
+    for (let corner = 0; corner < 3; corner++) {
+      const vertex = index + corner;
+      const height = (Math.sin(positions.getX(vertex) * 1.7 + positions.getZ(vertex) * .9) + Math.cos(positions.getZ(vertex) * 1.3)) * .075;
+      positions.setY(vertex, height);
+      shade.toArray(colors, vertex * 3);
+    }
   }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  const ground = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  ground.name = "dark-faceted-ground";
+  scene.add(ground);
+}
+
+function addScenery(scene: THREE.Scene, models: { rock: THREE.Object3D; spruce: THREE.Object3D; oak: THREE.Object3D }) {
+  const place = (source: THREE.Object3D, x: number, z: number, scale: number, base: number, rotation: number) => {
+    const object = source.clone(true);
+    object.scale.setScalar(scale);
+    object.position.set(x, base * scale, z);
+    object.rotation.y = rotation;
+    scene.add(object);
+  };
+  place(models.rock, -13, -9, .8, .331, .5);
+  place(models.rock, 11, 8, .65, .331, 1.9);
+  place(models.rock, -2, 12, .55, .331, 2.8);
+  place(models.spruce, -13, 6, .42, 3.104, .3);
+  place(models.spruce, 12, -6, .34, 3.104, 2.3);
+  place(models.oak, -10, -2, .48, 2.176, 1.1);
+  place(models.oak, 10, 3, .38, 2.176, 2.7);
 }
 
 function addStraightRoad(parent: THREE.Object3D, source: THREE.Object3D) {
@@ -118,7 +141,7 @@ function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: 
   const root = new THREE.Group();
   root.position.copy(position);
   // Align each local z-axis route to the camera's horizontal screen axis.
-  root.rotation.y = -1.036;
+  root.rotation.y = -1.036 + THREE.MathUtils.degToRad(5);
   scene.add(root);
   addStraightRoad(root, roadTile);
   cuboid(root, 2.85, 2.25, 2.25, materials.warehouse, 0, 1.12, -6);
@@ -180,7 +203,7 @@ function positionCargo(object: THREE.Group, where: string, truckZ: number, x: nu
   if (where === "handoff") object.position.set(1.06, 1.62, .35);
 }
 
-export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string, terrainUrl: string, roadUrl: string) {
+export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string, roadUrl: string, sceneryUrls: { rock: string; spruce: string; oak: string }) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "low-power" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -189,8 +212,9 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
   const sunlight = new THREE.DirectionalLight(0xffefd6, 2.4);
   sunlight.position.set(-6, 15, 9); scene.add(sunlight);
   const loader = new GLTFLoader();
-  const [terrain, road] = await Promise.all([loader.loadAsync(terrainUrl), loader.loadAsync(roadUrl)]);
-  addCountrysideTerrain(scene, terrain.scene);
+  const [road, rock, spruce, oak] = await Promise.all([loader.loadAsync(roadUrl), loader.loadAsync(sceneryUrls.rock), loader.loadAsync(sceneryUrls.spruce), loader.loadAsync(sceneryUrls.oak)]);
+  addFacetedGround(scene);
+  addScenery(scene, { rock: rock.scene, spruce: spruce.scene, oak: oak.scene });
   const unsafe = buildLane(scene, new THREE.Vector3(2.3, 0, 3.9), false, logoUrl, road.scene);
   const safe = buildLane(scene, new THREE.Vector3(-2.3, 0, -3.9), true, logoUrl, road.scene);
   const camera = new THREE.OrthographicCamera(-15, 15, 7, -7, .1, 100);
