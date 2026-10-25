@@ -46,7 +46,7 @@ async function addCountrysideTerrain(scene: THREE.Scene, url: string) {
   const terrain = new THREE.Group();
   terrain.name = "countryside-grass-tile-grid";
   scene.add(terrain);
-  const scale = .55;
+  const scale = .8;
   const step = 4 * scale;
   // A 15×15 field extends beyond the camera crop, so every visible edge stays terrain.
   for (let row = -7; row <= 7; row++) for (let column = -7; column <= 7; column++) {
