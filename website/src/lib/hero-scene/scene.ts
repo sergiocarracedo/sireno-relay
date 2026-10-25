@@ -35,24 +35,35 @@ function cone(parent: THREE.Object3D, r: number, h: number, sides: number, mat: 
   return mesh;
 }
 
+function terrainElevation(x: number, z: number) {
+  const broadRoll = Math.sin(x * .105) * Math.cos(z * .09) * .9;
+  const smallerRoll = Math.sin(x * .21 + z * .14) * .36;
+  const leftRise = Math.exp(-((x + 22) ** 2 + (z - 14) ** 2) / 190) * .85;
+  const rightRise = Math.exp(-((x - 18) ** 2 + (z + 18) ** 2) / 230) * .65;
+  return broadRoll + smallerRoll + leftRise + rightRise;
+}
+
 function addFacetedGround(scene: THREE.Scene) {
-  const geometry = new THREE.PlaneGeometry(74, 74, 28, 28).toNonIndexed();
+  // Adapted from the elevation-mesh approach: a coarse shared-vertex grid,
+  // displaced by elevation then shaded flat with one material.
+  const segments = 16;
+  const geometry = new THREE.PlaneGeometry(74, 74, segments, segments);
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.getAttribute("position");
-  const colors = new Float32Array(positions.count * 3);
-  const shades = [new THREE.Color(0x183f32), new THREE.Color(0x205341), new THREE.Color(0x28664c), new THREE.Color(0x12352a)];
-  for (let index = 0; index < positions.count; index += 3) {
-    const shade = shades[(index / 3 * 17 + Math.floor(index / 31)) % shades.length];
-    for (let corner = 0; corner < 3; corner++) {
-      const vertex = index + corner;
-      const height = (Math.sin(positions.getX(vertex) * 1.7 + positions.getZ(vertex) * .9) + Math.cos(positions.getZ(vertex) * 1.3)) * .075;
-      positions.setY(vertex, height);
-      shade.toArray(colors, vertex * 3);
+  const step = 74 / segments;
+  for (let row = 0; row <= segments; row++) for (let column = 0; column <= segments; column++) {
+    const index = row * (segments + 1) + column;
+    const isEdge = row === 0 || row === segments || column === 0 || column === segments;
+    const jitter = Math.sin(column * 79.17 + row * 37.73) * .5;
+    if (!isEdge) {
+      positions.setX(index, positions.getX(index) + jitter * step * .34);
+      positions.setZ(index, positions.getZ(index) + Math.cos(column * 31.41 + row * 97.19) * step * .34);
     }
+    positions.setY(index, terrainElevation(positions.getX(index), positions.getZ(index)));
   }
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  geometry.computeVertexNormals();
-  const ground = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  const facetedGeometry = geometry.toNonIndexed();
+  facetedGeometry.computeVertexNormals();
+  const ground = new THREE.Mesh(facetedGeometry, new THREE.MeshLambertMaterial({ color: 0x2a654b, flatShading: true }));
   ground.name = "dark-faceted-ground";
   scene.add(ground);
 }
@@ -61,7 +72,7 @@ function addScenery(scene: THREE.Scene, models: { rock: THREE.Object3D; spruce: 
   const place = (source: THREE.Object3D, x: number, z: number, scale: number, base: number, rotation: number) => {
     const object = source.clone(true);
     object.scale.setScalar(scale);
-    object.position.set(x, base * scale, z);
+    object.position.set(x, terrainElevation(x, z) + base * scale, z);
     object.rotation.y = rotation;
     scene.add(object);
   };
@@ -140,6 +151,7 @@ type Lane = {
 function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: boolean, logoUrl: string, roadTile: THREE.Object3D): Lane {
   const root = new THREE.Group();
   root.position.copy(position);
+  root.position.y = 1.8;
   // Align each local z-axis route to the camera's horizontal screen axis.
   root.rotation.y = -1.036 + THREE.MathUtils.degToRad(5);
   scene.add(root);
@@ -208,9 +220,9 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight(0xeaffdd, 0x27452f, 2.9));
-  const sunlight = new THREE.DirectionalLight(0xffefd6, 2.4);
-  sunlight.position.set(-6, 15, 9); scene.add(sunlight);
+  scene.add(new THREE.HemisphereLight(0xeaffdd, 0x27452f, .45));
+  const sunlight = new THREE.DirectionalLight(0xffefd6, 3.2);
+  sunlight.position.set(-12, 7, 10); scene.add(sunlight);
   const loader = new GLTFLoader();
   const [road, rock, spruce, oak] = await Promise.all([loader.loadAsync(roadUrl), loader.loadAsync(sceneryUrls.rock), loader.loadAsync(sceneryUrls.spruce), loader.loadAsync(sceneryUrls.oak)]);
   addFacetedGround(scene);
