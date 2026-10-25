@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { routeAt } from "./timeline";
 
 const palette = {
@@ -38,6 +39,23 @@ function tree(parent: THREE.Object3D, x: number, z: number, size = 1) {
   cuboid(parent, .17 * size, .75 * size, .17 * size, materials.earth, x, .38 * size, z);
   cone(parent, .61 * size, 1.4 * size, 5, materials.dark, x, 1.2 * size, z);
   cone(parent, .48 * size, 1.16 * size, 5, materials.grass, x, 1.95 * size, z);
+}
+
+async function addCountrysideTerrain(scene: THREE.Scene, url: string) {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  const terrain = new THREE.Group();
+  terrain.name = "countryside-grass-tile-grid";
+  scene.add(terrain);
+  const scale = .55;
+  const step = 4 * scale;
+  // 81 rotations of the supplied 4×4 tile create one varied but coherent landscape.
+  for (let row = -4; row <= 4; row++) for (let column = -4; column <= 4; column++) {
+    const tile = gltf.scene.clone(true);
+    tile.scale.setScalar(scale);
+    tile.position.set(column * step, -.225, row * step);
+    tile.rotation.y = ((row * 5 + column * 3 + 8) % 4) * Math.PI / 2;
+    terrain.add(tile);
+  }
 }
 
 function truckModel(parent: THREE.Object3D) {
@@ -98,11 +116,8 @@ function buildLane(scene: THREE.Scene, x: number, protectedRoute: boolean, logoU
   const root = new THREE.Group();
   root.position.x = x;
   scene.add(root);
-  // A thick chunk of landscape reads as one floating, faceted terrain tile.
-  cuboid(root, 9, .9, 16, materials.earth, 0, -.73, .1);
-  cuboid(root, 9, .18, 16, materials.grass, 0, -.2, .1);
-  cuboid(root, 3.25, .07, 14.6, materials.road, 0, -.06, .35);
-  for (let z = -4; z < 7; z += 2.5) cuboid(root, .08, .025, .74, materials.stripe, 0, -.01, z);
+  cuboid(root, 3.25, .07, 14.6, materials.road, 0, .035, .35);
+  for (let z = -4; z < 7; z += 2.5) cuboid(root, .08, .025, .74, materials.stripe, 0, .09, z);
   for (const [tx, tz, size] of [[-3.5, -5.3, 1.1], [3.65, -5.7, 1.25], [-3.55, 3, .95], [3.65, 5.2, 1.15]] as const) tree(root, tx, tz, size);
   for (const [mx, mz, size] of [[-3.3, -2.3, 2.15], [3.5, 3.4, 1.8]] as const) {
     const mountain = cone(root, size, size * 1.5, 5, materials.meadow, mx, size * .72, mz);
@@ -169,7 +184,7 @@ function positionCargo(object: THREE.Group, where: string, truckZ: number, x: nu
   if (where === "handoff") object.position.set(1.06, 1.62, .35);
 }
 
-export function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string) {
+export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string, terrainUrl: string) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "low-power" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -177,6 +192,7 @@ export function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string) {
   scene.add(new THREE.HemisphereLight(0xeaffdd, 0x27452f, 2.9));
   const sunlight = new THREE.DirectionalLight(0xffefd6, 2.4);
   sunlight.position.set(-6, 15, 9); scene.add(sunlight);
+  await addCountrysideTerrain(scene, terrainUrl);
   const unsafe = buildLane(scene, -5.3, false, logoUrl);
   const safe = buildLane(scene, 5.3, true, logoUrl);
   const camera = new THREE.OrthographicCamera(-15, 15, 7, -7, .1, 100);
