@@ -1,0 +1,14 @@
+<section class="route-comparison shell" aria-label="Mail access with and without the relay">
+  <article class="route-comparison__route route-comparison__route--unsafe">
+    <p class="route-comparison__eyebrow">01 / DIRECT ACCESS</p>
+    <h2>Without a checkpoint</h2>
+    <p>The agent can use mailbox credentials directly: relay folder and sender rules do not filter its view, and sends bypass relay recipient checks. In this illustrative journey, private mail goes out and an unsafe payload comes back.</p>
+    <div class="route-comparison__outcomes"><span>Personal folder <b>EXPOSED</b></span><span>Confidential email <b>EXPOSED</b></span></div>
+  </article>
+  <article class="route-comparison__route route-comparison__route--safe">
+    <p class="route-comparison__eyebrow">02 / SIRENORELAY CHECKPOINT</p>
+    <h2>Policy checks both ways</h2>
+    <p>SirenoRELAY owns upstream credentials, authenticates the agent token, filters folders and messages, and checks outbound recipients before handoff. The guard withholds private mail and stops the unsafe return here; the owner's original mail is not deleted.</p>
+    <div class="route-comparison__outcomes"><span>Personal folder <b>BLOCKED</b></span><span>Confidential email <b>BLOCKED</b></span></div>
+  </article>
+</section>

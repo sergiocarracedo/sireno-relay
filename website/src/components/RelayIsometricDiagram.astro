@@ -54,7 +54,6 @@ import { withBase } from "../lib/with-base";
             <div class="iso-link iso-link--upstream"><span class="iso-chip iso-chip--upstream">authorized request</span></div>
             <div class="iso-link iso-link--return"><span class="iso-chip iso-chip--return">allowed results</span></div>
             <div class="iso-link iso-link--rejected"><span class="iso-chip iso-chip--rejected">blocked</span></div>
-            <div class="iso-stop-marker"><span>×</span><b>stopped<br />in relay</b></div>
             <div class="iso-machine iso-machine--agent">
               <div class="iso-machine__top"><span class="iso-machine__glyph">AI</span><span class="iso-machine__trace"></span></div>
               <div class="iso-machine__front"></div><div class="iso-machine__side"></div><div class="iso-machine__left"></div>
@@ -67,6 +66,13 @@ import { withBase } from "../lib/with-base";
               <div class="iso-machine__top"><span class="iso-machine__glyph">MAIL</span><span class="iso-machine__trace"></span></div>
               <div class="iso-machine__front"></div><div class="iso-machine__side"></div><div class="iso-machine__left"></div>
             </div>
+          </div>
+          <div class="iso-checkpoint" aria-hidden="true">
+            <div class="iso-checkpoint__guard"><svg viewBox="0 0 36 44"><path d="M9 14h18l-3-6H12zM12 16h12l4 17H8zM13 33v8m10-8v8M9 21l-6 8m24-8 6 8"/><path d="M15 21h6v8h-6z"/></svg><span>POLICY<br />CONTROL</span></div>
+            <div class="iso-checkpoint__barrier"><i></i><b></b><b></b></div>
+            <div class="iso-parcel iso-parcel--personal"><span>×</span><small>PERSONAL</small></div>
+            <div class="iso-parcel iso-parcel--confidential"><span>×</span><small>PRIVATE</small></div>
+            <div class="iso-parcel iso-parcel--cleared"><span>✓</span><small>ALLOWED</small></div>
           </div>
           <div class="iso-scene__outcomes">
             <div class="iso-outcome">
