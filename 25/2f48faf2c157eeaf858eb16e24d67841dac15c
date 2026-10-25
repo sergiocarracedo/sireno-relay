@@ -1,0 +1,14 @@
+.github/workflows/publish-website.yml
+  h_f90ee31b03fc41 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "252f48faf2c157eeaf858eb16e24d67841dac15c",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
