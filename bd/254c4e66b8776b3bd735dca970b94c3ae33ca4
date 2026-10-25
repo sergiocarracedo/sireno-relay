@@ -1,0 +1,18 @@
+cli/internal/onboard/onboard.go
+  h_f90ee31b03fc41 84-88
+cli/internal/onboard/onboard_test.go
+  h_f90ee31b03fc41 51-52,65-67
+cli/internal/provider/himalaya.go
+  h_f90ee31b03fc41 33,35,37-39,222,227-236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bd254c4e66b8776b3bd735dca970b94c3ae33ca4",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
