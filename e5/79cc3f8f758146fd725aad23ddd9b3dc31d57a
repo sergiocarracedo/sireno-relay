@@ -1,0 +1,14 @@
+website/src/lib/version.ts
+  h_f90ee31b03fc41 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e579cc3f8f758146fd725aad23ddd9b3dc31d57a",
+  "prompts": {},
+  "humans": {
+    "h_f90ee31b03fc41": {
+      "author": "Sergio Carracedo <hi@sergiocarracedo.es>"
+    }
+  }
+}
