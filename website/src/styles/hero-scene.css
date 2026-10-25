@@ -4,6 +4,7 @@
 .hero--scene .hero-copy { margin-bottom: 0; }
 .hero--scene .hero-copy { color: #f2f8eb; }
 .hero--scene .hero-copy h1,.hero--scene .hero-copy .lede { text-shadow: 0 2px 18px rgb(7 25 18 / .68); }
+.hero--scene .hero-copy h1 em { text-shadow: none; }
 .hero--scene .hero-copy .lede { color: #d1e1d5; }
 .hero--scene .hero-copy .eyebrow--pill { border-color: rgb(236 255 231 / .38); background: rgb(12 39 29 / .68); color: #e7f5de; }
 .hero-scene { position: absolute; inset: 0; z-index: 0; width: 100%; overflow: hidden; }
@@ -17,8 +18,8 @@
 .hero-scene--ready .hero-scene__poster { opacity: 0; }
 .hero-scene__label { position: absolute; z-index: 2; top: 710px; display: inline-flex; align-items: center; gap: 9px; border: 1px solid rgb(255 255 255 / .65); border-radius: 999px; padding: 8px 13px; background: rgb(18 47 35 / .91); box-shadow: 0 5px 16px rgb(12 36 27 / .15); color: #f5f8dd; font: 700 .62rem "JetBrains Mono", monospace; letter-spacing: .04em; }
 .hero-scene__label i { width: 8px; height: 8px; border-radius: 50%; background: #ed8766; }
-.hero-scene__label--risk { left: max(24px, calc(25% - 100px)); }
-.hero-scene__label--safe { right: max(24px, calc(25% - 115px)); }
+.hero-scene__label--risk { left: 24px; }
+.hero-scene__label--safe { right: 24px; }
 .hero-scene__label--safe i { background: #d2f824; }
 .hero-scene__verdict { position: absolute; z-index: 2; bottom: 22px; border-radius: 5px; padding: 7px 9px; background: rgb(18 47 35 / .88); color: #f5f8dd; font: 600 .6rem "JetBrains Mono", monospace; }
 .hero-scene__verdict--risk { left: max(24px, calc(25% - 155px)); }

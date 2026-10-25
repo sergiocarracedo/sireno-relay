@@ -1,35 +1,22 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { routeAt } from "./timeline";
-
-const palette = {
-  earth: 0x4a453a, grass: 0x3d8557, meadow: 0x5da674, dark: 0x143f30,
-  road: 0x344d42, stripe: 0xe5dca5, warehouse: 0xb8c6a0, roof: 0x286148,
-  truck: 0x5ec2a0, cab: 0x1a7667, windows: 0x163f45, box: 0xb69364,
-  boxSide: 0xcaa873, private: 0xe8fb76, black: 0x171e1e,
-  danger: 0xf48566, checkpoint: 0x245846,
-};
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { clone as cloneSkinnedModel } from "three/addons/utils/SkeletonUtils.js";
+import { HOUSE_Z, INBOUND_CHECKPOINT_Z, OUTBOUND_CHECKPOINT_Z, routeAt } from "./timeline";
 
 const material = (color: number, emissive = 0) => new THREE.MeshLambertMaterial({ color, emissive, flatShading: true });
 const materials = {
-  earth: material(palette.earth), grass: material(palette.grass), meadow: material(palette.meadow),
-  dark: material(palette.dark), road: material(palette.road), stripe: material(palette.stripe),
-  warehouse: material(palette.warehouse), roof: material(palette.roof), truck: material(palette.truck),
-  cab: material(palette.cab), windows: material(palette.windows), box: material(palette.box),
-  boxSide: material(palette.boxSide), private: material(palette.private, 0x758c16),
-  black: material(palette.black), danger: material(palette.danger, 0x51180d),
-  checkpoint: material(palette.checkpoint), skin: material(0xe7bb8c),
+  stripe: material(0xe5dca5),
+  danger: material(0xf48566, 0x51180d),
 };
+const ROAD_ANGLE = -Math.atan2(27, 16);
+const ROAD_SHIFT = new THREE.Vector2(-1.8, -3);
+const ROAD_CENTERS = [[2.3 + ROAD_SHIFT.x, 3.9 + ROAD_SHIFT.y], [-2.3 + ROAD_SHIFT.x, -3.9 + ROAD_SHIFT.y]] as const;
+const roadDistance = (x: number, z: number) => Math.min(...ROAD_CENTERS.map(([cx, cz]) =>
+  Math.abs(Math.cos(ROAD_ANGLE) * (x - cx) - Math.sin(ROAD_ANGLE) * (z - cz))));
 
 function cuboid(parent: THREE.Object3D, w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-  mesh.position.set(x, y, z);
-  parent.add(mesh);
-  return mesh;
-}
-
-function cone(parent: THREE.Object3D, r: number, h: number, sides: number, mat: THREE.Material, x: number, y: number, z: number) {
-  const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, sides), mat);
   mesh.position.set(x, y, z);
   parent.add(mesh);
   return mesh;
@@ -40,14 +27,17 @@ function terrainElevation(x: number, z: number) {
   const smallerRoll = Math.sin(x * .21 + z * .14) * .36;
   const leftRise = Math.exp(-((x + 22) ** 2 + (z - 14) ** 2) / 190) * .85;
   const rightRise = Math.exp(-((x - 18) ** 2 + (z + 18) ** 2) / 230) * .65;
-  return broadRoll + smallerRoll + leftRise + rightRise;
+  const natural = broadRoll + smallerRoll + leftRise + rightRise;
+  const distance = roadDistance(x, z);
+  const blend = THREE.MathUtils.smoothstep(distance, 2.25, 4.6);
+  return THREE.MathUtils.lerp(.43, natural, blend);
 }
 
 function addFacetedGround(scene: THREE.Scene) {
   // Adapted from the elevation-mesh approach: a coarse shared-vertex grid,
   // displaced by elevation then shaded flat with one material.
   const extent = 148;
-  const segments = 36;
+  const segments = 96;
   const geometry = new THREE.PlaneGeometry(extent, extent, segments, segments);
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.getAttribute("position");
@@ -79,86 +69,140 @@ function addFacetedGround(scene: THREE.Scene) {
 }
 
 function addScenery(scene: THREE.Scene, models: { rock: THREE.Object3D; spruce: THREE.Object3D; oak: THREE.Object3D }) {
+  const screenRight = new THREE.Vector2(.86, -.51);
+  const awayFromCamera = new THREE.Vector2(-.51, -.86);
+  const terrainPoint = (across: number, depth: number) => new THREE.Vector2(
+    screenRight.x * across + awayFromCamera.x * depth,
+    screenRight.y * across + awayFromCamera.y * depth,
+  );
   const place = (source: THREE.Object3D, x: number, z: number, scale: number, base: number, rotation: number) => {
+    // No decoration (including canopies or rock outcrops) may overlap a road.
+    if (roadDistance(x, z) < 5.5) return;
     const object = source.clone(true);
     object.scale.setScalar(scale);
     object.position.set(x, terrainElevation(x, z) + base * scale, z);
     object.rotation.y = rotation;
     scene.add(object);
   };
-  place(models.rock, -13, -9, .8, .331, .5);
-  place(models.rock, 11, 8, .65, .331, 1.9);
-  place(models.rock, -2, 12, .55, .331, 2.8);
+  const rockPositions = [[-16, 8], [-11, 15], [-6, 10], [0, 17], [6, 8], [11, 14], [16, 9]] as const;
+  rockPositions.forEach(([across, depth], index) => {
+    const point = terrainPoint(across, depth);
+    place(models.rock, point.x + ROAD_SHIFT.x, point.y + ROAD_SHIFT.y, .52 + (index % 3) * .09, .331, index * .71);
+  });
+
+  const clearingTrees = [[-14, 13], [-7, 8], [0, 17], [7, 10], [14, 15]] as const;
+  clearingTrees.forEach(([across, depth], index) => {
+    const point = terrainPoint(across, depth);
+    const oak = index === 2 || index === 4;
+    place(oak ? models.oak : models.spruce, point.x + ROAD_SHIFT.x, point.y + ROAD_SHIFT.y, .44 + (index % 3) * .06, oak ? 2.176 : 3.104, index * 1.17);
+  });
 
   // A dense band along the far edge fills the top of the hero like a forest backdrop.
-  const screenRight = new THREE.Vector2(.86, -.51);
-  const awayFromCamera = new THREE.Vector2(-.51, -.86);
   for (let row = 0; row < 12; row++) {
     for (let column = 0; column < 43; column++) {
       const seed = row * 37 + column * 19;
       const across = (column - 21) * 1.82 + (row % 2) * .91 + Math.sin(seed * 2.1) * .32;
       const forestEdge = 29 + Math.sin(across * .13) * 4 + Math.sin(across * .27) * 1.25;
       const depth = forestEdge + row * 1.85 + Math.cos(seed * 1.7) * .3;
-      const x = screenRight.x * across + awayFromCamera.x * depth;
-      const z = screenRight.y * across + awayFromCamera.y * depth;
+      const point = terrainPoint(across, depth);
       const oak = seed % 6 === 0;
       const model = oak ? models.oak : models.spruce;
       const scale = .48 + ((seed * 7) % 11) * .04;
       const rotation = ((seed * 137.5) % 360) * Math.PI / 180;
-      place(model, x, z, scale, oak ? 2.176 : 3.104, rotation);
+      place(model, point.x, point.y, scale, oak ? 2.176 : 3.104, rotation);
     }
   }
 }
 
 function addStraightRoad(parent: THREE.Object3D, source: THREE.Object3D) {
-  for (const z of [-5, -1, 3, 7]) {
+  // The Poly road runs along its local z-axis. Fit a segment to four world units
+  // and repeat in both directions so each lane reaches both viewport borders.
+  const bounds = new THREE.Box3().setFromObject(source);
+  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new THREE.Vector3());
+  const length = 4;
+  const scale = length / size.z;
+  const widthScale = 4.5 / size.x;
+  for (let z = -40; z <= 40; z += length) {
     const segment = source.clone(true);
-    segment.scale.set(.82, 1, 1);
-    segment.position.set(0, -.07, z);
+    segment.scale.set(widthScale, scale, scale);
+    segment.position.set(-center.x * widthScale, -bounds.min.y * scale - .07, z - center.z * scale);
     parent.add(segment);
   }
 }
 
-function truckModel(parent: THREE.Object3D) {
-  const truck = new THREE.Group();
-  parent.add(truck);
-  cuboid(truck, 1.35, .43, 2.6, materials.truck, 0, .68, 0);
-  cuboid(truck, 1.3, .8, .98, materials.cab, 0, 1.22, .78);
-  cuboid(truck, 1.08, .44, .08, materials.windows, 0, 1.32, 1.29);
-  cuboid(truck, 1.22, .12, 1.36, materials.dark, 0, .96, -.64);
-  for (const x of [-.7, .7]) for (const z of [-.87, .87]) {
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(.29, .29, .17, 8), materials.black);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, .36, z);
-    truck.add(wheel);
-  }
-  cuboid(truck, .3, .17, .08, materials.stripe, -.43, .8, 1.34);
-  cuboid(truck, .3, .17, .08, materials.stripe, .43, .8, 1.34);
-  return truck;
+function vehicleModel(parent: THREE.Object3D, source: THREE.Object3D, color: number) {
+  const vehicle = new THREE.Group();
+  const model = source.clone(true);
+  model.scale.setScalar(.8);
+  const paintedTextures = new Map<THREE.Texture, THREE.Texture>();
+  model.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    const recolorMaterial = (sourceMaterial: THREE.Material) => {
+      const cloned = sourceMaterial.clone();
+      if (object.name.startsWith("Pickup_") && cloned.name === "Atlas" && cloned instanceof THREE.MeshStandardMaterial && cloned.map) {
+        let texture = paintedTextures.get(cloned.map);
+        if (!texture) {
+          const image = cloned.map.image;
+          const canvas = document.createElement("canvas");
+          canvas.width = image.width; canvas.height = image.height;
+          const context = canvas.getContext("2d")!;
+          context.drawImage(image, 0, 0);
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+          // The body uses this one blue swatch in the model's texture atlas.
+          // Leave the glass, lights, tires and all other atlas swatches unchanged.
+          for (let i = 0; i < pixels.data.length; i += 4) {
+            if (Math.abs(pixels.data[i] - 78) < 5 && Math.abs(pixels.data[i + 1] - 138) < 5 && Math.abs(pixels.data[i + 2] - 172) < 5) {
+              pixels.data[i] = (color >> 16) & 255;
+              pixels.data[i + 1] = (color >> 8) & 255;
+              pixels.data[i + 2] = color & 255;
+            }
+          }
+          context.putImageData(pixels, 0, 0);
+          texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = cloned.map.colorSpace;
+          texture.flipY = cloned.map.flipY;
+          texture.wrapS = cloned.map.wrapS;
+          texture.wrapT = cloned.map.wrapT;
+          texture.magFilter = cloned.map.magFilter;
+          texture.minFilter = cloned.map.minFilter;
+          paintedTextures.set(cloned.map, texture);
+        }
+        cloned.map = texture;
+      }
+      return cloned;
+    };
+    object.material = Array.isArray(object.material) ? object.material.map(recolorMaterial) : recolorMaterial(object.material);
+  });
+  vehicle.add(model);
+  parent.add(vehicle);
+  vehicle.position.y = .25;
+  return vehicle;
 }
 
-function boxModel(parent: THREE.Object3D, glowing = false) {
+function normalizedAsset(source: THREE.Object3D, size: number) {
+  const object = source.clone(true);
+  object.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(object);
+  const center = bounds.getCenter(new THREE.Vector3());
+  const dimensions = bounds.getSize(new THREE.Vector3());
+  const scale = size / Math.max(dimensions.x, dimensions.y, dimensions.z);
+  object.scale.setScalar(scale);
+  object.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+  return object;
+}
+
+function boxModel(parent: THREE.Object3D, source: THREE.Object3D) {
   const parcel = new THREE.Group();
   parent.add(parcel);
-  cuboid(parcel, .57, .57, .57, glowing ? materials.private : materials.box, 0, 0, 0);
-  cuboid(parcel, .1, .59, .6, glowing ? materials.stripe : materials.boxSide, 0, 0, 0);
-  if (glowing) {
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(.44, .045, 5, 10), materials.private);
-    halo.rotation.x = Math.PI / 2;
-    halo.position.y = -.31;
-    parcel.add(halo);
-  }
+  parcel.add(normalizedAsset(source, .57));
   return parcel;
 }
 
-function bombModel(parent: THREE.Object3D) {
+function bombModel(parent: THREE.Object3D, source: THREE.Object3D) {
   const bomb = new THREE.Group();
   parent.add(bomb);
-  const sphere = new THREE.Mesh(new THREE.IcosahedronGeometry(.35, 1), materials.black);
-  bomb.add(sphere);
-  cuboid(bomb, .09, .26, .09, materials.stripe, 0, .42, 0);
-  const spark = cone(bomb, .18, .32, 5, materials.private, 0, .63, 0);
-  spark.rotation.z = .48;
+  bomb.add(normalizedAsset(source, .78));
   return bomb;
 }
 
@@ -168,64 +212,101 @@ type Lane = {
   ordinary: THREE.Group[];
   privateBox: THREE.Group;
   bomb: THREE.Group;
-  barrier?: THREE.Group;
-  guard?: THREE.Group;
+  bombSparks: THREE.Group;
+  checkpoints: Checkpoint[];
   exclamation?: THREE.Group;
 };
+type Checkpoint = {
+  z: number;
+  barrier: THREE.Group;
+  guard: THREE.Group;
+  mixer?: THREE.AnimationMixer;
+  duration: number;
+  idle?: THREE.AnimationAction;
+  walk?: THREE.AnimationAction;
+};
 
-function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: boolean, logoUrl: string, roadTile: THREE.Object3D): Lane {
+// The pickup's open bed is behind the cab (negative local z after its turn).
+// Truck-bound parcels follow the vehicle through the drive and return pass.
+const BED_Y = .95;
+function placeCargo(object: THREE.Group, truck: THREE.Group, root: THREE.Group, where: string, x: number, height: number) {
+  const onTruck = where === "truck";
+  const parent = onTruck ? truck : root;
+  if (object.parent !== parent) parent.add(object);
+  object.visible = where !== "outside" && where !== "hidden" && where !== "booth";
+  if (onTruck) object.position.set(x, BED_Y + height, -.9);
+  if (where === "warehouse") object.position.set(-2.8 + x, height, HOUSE_Z);
+}
+
+function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: boolean, logoUrl: string, roadTile: THREE.Object3D, sedan: THREE.Object3D, houseSource: THREE.Object3D, officerSource: THREE.Object3D, officerAnimations: THREE.AnimationClip[], boxSource: THREE.Object3D, specialBoxSource: THREE.Object3D, bombSource: THREE.Object3D, towerSource: THREE.Object3D): Lane {
   const root = new THREE.Group();
   root.position.copy(position);
-  root.position.y = 1.8;
+  root.position.y = .5;
   // Align each local z-axis route to the camera's horizontal screen axis.
-  root.rotation.y = -1.036 + THREE.MathUtils.degToRad(5);
+  root.rotation.y = ROAD_ANGLE;
   scene.add(root);
   addStraightRoad(root, roadTile);
-  cuboid(root, 2.85, 2.25, 2.25, materials.warehouse, 0, 1.12, -6);
-  const roof = cone(root, 2.05, 1.42, 4, materials.roof, 0, 2.95, -6);
-  roof.rotation.y = Math.PI / 4;
-  cuboid(root, 1.33, 1.39, .08, materials.dark, 0, .7, -4.84);
-  cuboid(root, 1.7, .12, .5, materials.boxSide, 0, .05, -4.48);
-  for (const px of [-1.02, 1.02]) cuboid(root, .1, 1.55, .11, materials.roof, px, 1.2, -4.79);
+  const house = houseSource.clone(true);
+  house.scale.setScalar(.56);
+  // Negative local x is the far side of the road from the camera.
+  house.position.set(-3.81, 1.43, HOUSE_Z);
+  house.rotation.y = Math.PI / 2;
+  root.add(house);
 
-  const truck = truckModel(root);
-  const ordinary = [boxModel(root), boxModel(root), boxModel(root)];
-  const privateBox = boxModel(root, true);
-  const bomb = bombModel(root);
-  const lane: Lane = { root, truck, ordinary, privateBox, bomb };
+  const truck = vehicleModel(root, sedan, protectedRoute ? 0x9bdc28 : 0xe85e3c);
+  const ordinary = [boxModel(root, boxSource), boxModel(root, boxSource), boxModel(root, boxSource)];
+  const privateBox = boxModel(root, specialBoxSource);
+  privateBox.scale.setScalar(.66);
+  const bomb = bombModel(root, bombSource);
+  const bombSparks = new THREE.Group();
+  bomb.add(bombSparks);
+  const sparkColors = [0xffd04b, 0xff822e, 0xffea89, 0xffa63d];
+  for (const color of sparkColors) {
+    bombSparks.add(new THREE.Mesh(new THREE.OctahedronGeometry(.055), new THREE.MeshBasicMaterial({ color })));
+  }
+  const lane: Lane = { root, truck, ordinary, privateBox, bomb, bombSparks, checkpoints: [] };
 
   if (protectedRoute) {
-    cuboid(root, 1.6, 1.85, 1.5, materials.checkpoint, 2.55, .92, .4);
-    const boothRoof = cone(root, 1.19, .83, 4, materials.roof, 2.55, 2.22, .4);
-    boothRoof.rotation.y = Math.PI / 4;
-    cuboid(root, .67, .57, .05, materials.windows, 2.55, 1.26, 1.17);
-    const guard = new THREE.Group();
-    root.add(guard); guard.position.set(1.23, 0, -.48); guard.scale.setScalar(1.25);
-    cone(guard, .34, .89, 6, materials.stripe, 0, .7, 0);
-    const face = new THREE.Mesh(new THREE.IcosahedronGeometry(.23, 1), materials.skin);
-    face.position.y = 1.32; guard.add(face);
-    cuboid(guard, .58, .12, .54, materials.cab, 0, 1.54, .02);
-    cuboid(guard, .14, .66, .17, materials.skin, -.37, .9, .13);
-    lane.guard = guard;
-    const barrier = new THREE.Group();
-    barrier.position.set(-1.7, .09, .7);
-    root.add(barrier); lane.barrier = barrier;
-    cuboid(root, .24, 1.17, .24, materials.stripe, -1.7, .5, .7);
-    const arm = cuboid(barrier, 3.25, .15, .15, materials.stripe, 1.62, .98, 0);
-    for (let i = 0; i < 7; i++) cuboid(arm, .19, .16, .16, materials.danger, -1.42 + i * .48, 0, 0);
-    const pole = cuboid(root, .14, 2.5, .14, materials.dark, -2.4, 1.25, -1.3);
-    pole.rotation.z = .03;
-    const sign = cuboid(root, 1.6, 1.05, .08, materials.stripe, -2.4, 2.42, -1.3);
-    const signFace = cuboid(root, 1.43, .91, .02, materials.dark, -2.4, 2.42, -1.24);
-    signFace.rotation.y = sign.rotation.y;
     const texture = new THREE.TextureLoader().load(logoUrl);
     texture.colorSpace = THREE.SRGBColorSpace;
-    const logo = new THREE.Mesh(new THREE.PlaneGeometry(.8, .8), new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide }));
-    logo.position.set(-2.4, 2.42, -1.21);
-    root.add(logo);
+    const idle = officerAnimations.find((clip) => /idle/i.test(clip.name));
+    const walk = officerAnimations.find((clip) => /walk/i.test(clip.name));
+    for (const z of [INBOUND_CHECKPOINT_Z, OUTBOUND_CHECKPOINT_Z]) {
+      const tower = towerSource.clone(true);
+      tower.scale.setScalar(.8);
+      tower.position.set(-3.96, 0, z);
+      root.add(tower);
+      const logoPanel = new THREE.Mesh(new THREE.BoxGeometry(.07, .72, .82), new THREE.MeshBasicMaterial({ color: 0x143f30 }));
+      logoPanel.position.set(.79, 2.3, 0);
+      tower.add(logoPanel);
+      const logo = new THREE.Mesh(new THREE.PlaneGeometry(.55, .55), new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide }));
+      logo.position.set(.831, 2.3, 0);
+      logo.rotation.y = Math.PI / 2;
+      tower.add(logo);
+
+      const guard = cloneSkinnedModel(officerSource) as THREE.Group;
+      guard.position.set(-3.15, 0, z + 1.05);
+      guard.scale.setScalar(.7);
+      guard.rotation.y = Math.PI;
+      root.add(guard);
+      const mixer = idle || walk ? new THREE.AnimationMixer(guard) : undefined;
+      const idleAction = idle ? mixer!.clipAction(idle) : undefined;
+      const walkAction = walk ? mixer!.clipAction(walk) : undefined;
+      idleAction?.play();
+      walkAction?.play();
+      walkAction?.setEffectiveWeight(0);
+
+      const barrier = new THREE.Group();
+      barrier.position.set(-1.7, .09, z);
+      root.add(barrier);
+      cuboid(root, .24, 1.17, .24, materials.stripe, -1.7, .5, z);
+      const arm = cuboid(barrier, 3.25, .15, .15, materials.stripe, 1.62, .98, 0);
+      for (let i = 0; i < 7; i++) cuboid(arm, .19, .16, .16, materials.danger, -1.42 + i * .48, 0, 0);
+      lane.checkpoints.push({ z, barrier, guard, mixer, duration: Math.max(idle?.duration ?? 0, walk?.duration ?? 0, 3), idle: idleAction, walk: walkAction });
+    }
   } else {
     const exclamation = new THREE.Group();
-    root.add(exclamation); exclamation.position.set(-1.68, .6, 6.7);
+    root.add(exclamation); exclamation.position.set(-1.68, .6, -7);
     cuboid(exclamation, .22, .97, .16, materials.danger, 0, .66, 0);
     cuboid(exclamation, .25, .22, .18, materials.danger, 0, -.04, 0);
     lane.exclamation = exclamation;
@@ -233,14 +314,7 @@ function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: 
   return lane;
 }
 
-function positionCargo(object: THREE.Group, where: string, truckZ: number, x: number, inbound: boolean) {
-  object.visible = where !== "outside" && where !== "hidden" && where !== "booth";
-  if (where === "truck") object.position.set(x, 1.56, truckZ + (inbound ? .55 : -.5));
-  if (where === "warehouse") object.position.set(x, .45, -4.15);
-  if (where === "handoff") object.position.set(1.06, 1.62, .35);
-}
-
-export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string, roadUrl: string, sceneryUrls: { rock: string; spruce: string; oak: string }) {
+export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string, roadUrl: string, carUrl: string, houseUrl: string, officerUrl: string, boxUrl: string, specialBoxUrl: string, bombUrl: string, towerUrl: string, sceneryUrls: { rock: string; spruce: string; oak: string }) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "low-power" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -249,47 +323,113 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
   const sunlight = new THREE.DirectionalLight(0xffefd6, 3.2);
   sunlight.position.set(-12, 7, 10); scene.add(sunlight);
   const loader = new GLTFLoader();
-  const [road, rock, spruce, oak] = await Promise.all([loader.loadAsync(roadUrl), loader.loadAsync(sceneryUrls.rock), loader.loadAsync(sceneryUrls.spruce), loader.loadAsync(sceneryUrls.oak)]);
+  const draco = new DRACOLoader();
+  draco.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+  loader.setDRACOLoader(draco);
+  const [road, sedan, house, officer, box, specialBox, bomb, tower, rock, spruce, oak] = await Promise.all([loader.loadAsync(roadUrl), loader.loadAsync(carUrl), loader.loadAsync(houseUrl), loader.loadAsync(officerUrl), loader.loadAsync(boxUrl), loader.loadAsync(specialBoxUrl), loader.loadAsync(bombUrl), loader.loadAsync(towerUrl), loader.loadAsync(sceneryUrls.rock), loader.loadAsync(sceneryUrls.spruce), loader.loadAsync(sceneryUrls.oak)]);
+  draco.dispose();
   addFacetedGround(scene);
   addScenery(scene, { rock: rock.scene, spruce: spruce.scene, oak: oak.scene });
-  const unsafe = buildLane(scene, new THREE.Vector3(2.3, 0, 3.9), false, logoUrl, road.scene);
-  const safe = buildLane(scene, new THREE.Vector3(-2.3, 0, -3.9), true, logoUrl, road.scene);
+  const unsafe = buildLane(scene, new THREE.Vector3(ROAD_CENTERS[0][0], 0, ROAD_CENTERS[0][1]), false, logoUrl, road.scene, sedan.scene, house.scene, officer.scene, officer.animations, box.scene, specialBox.scene, bomb.scene, tower.scene);
+  const safe = buildLane(scene, new THREE.Vector3(ROAD_CENTERS[1][0], 0, ROAD_CENTERS[1][1]), true, logoUrl, road.scene, sedan.scene, house.scene, officer.scene, officer.animations, box.scene, specialBox.scene, bomb.scene, tower.scene);
   const camera = new THREE.OrthographicCamera(-15, 15, 7, -7, .1, 100);
   camera.position.set(16, 23, 27);
   camera.lookAt(0, .3, 0);
   let width = 0; let height = 0;
 
-  function pose(lane: Lane, elapsed: number, protectedRoute: boolean) {
-    const state = routeAt(elapsed, protectedRoute);
+  function getViewportExit(lane: Lane) {
+    camera.updateMatrixWorld();
+    const screenX = (z: number) => lane.root.localToWorld(new THREE.Vector3(0, 1.2, z)).project(camera).x;
+    const edge = (direction: number) => {
+      let low = 0, high = 64;
+      for (let i = 0; i < 20; i++) {
+        const mid = (low + high) / 2;
+        if (direction * screenX(direction * mid) < -1.1) high = mid;
+        else low = mid;
+      }
+      return high;
+    };
+    return Math.max(edge(-1), edge(1));
+  }
+
+  function pose(lane: Lane, elapsed: number, protectedRoute: boolean, exitZ: number) {
+    const state = routeAt(elapsed, protectedRoute, exitZ);
     lane.truck.visible = state.visible;
     lane.truck.position.z = state.z;
-    lane.truck.rotation.y = state.inbound ? Math.PI : 0;
+    lane.truck.rotation.y = Math.PI;
     lane.ordinary.forEach((parcel, i) => {
-      parcel.visible = !state.inbound && state.visible;
-      const progress = Math.max(0, Math.min(1, (elapsed % 20 - (.45 + i * .42)) / .38));
-      parcel.position.set(
-        (i - 1) * (.45 - progress * .07),
-        .4 + progress * (.93 + (i === 1 ? .45 : 0)),
-        -4.12 + progress * (state.z - .53 + 4.12),
-      );
+      parcel.visible = !state.inbound && state.visible && i < state.ordinary;
+      if (parcel.parent !== lane.truck) lane.truck.add(parcel);
+      parcel.scale.setScalar(.66);
+      parcel.position.set((i - 1) * .43, BED_Y + .2, -1.3);
     });
-    positionCargo(lane.privateBox, state.privateBox, state.z, .28, state.inbound);
+    placeCargo(lane.privateBox, lane.truck, lane.root, state.privateBox, .28, .2);
     if (state.privateBox === "truck" && !state.inbound && elapsed % 20 < 2.1) {
       const progress = Math.max(0, Math.min(1, (elapsed % 20 - 1.2) / .9));
-      lane.privateBox.position.set(.28, .45 + progress * 1.11, -4.15 - progress * .65);
+      lane.root.add(lane.privateBox);
+      lane.privateBox.position.set(
+        THREE.MathUtils.lerp(-2.52, -.28, progress),
+        THREE.MathUtils.lerp(.2, lane.truck.position.y + BED_Y + .2, progress) + Math.sin(progress * Math.PI) * .7,
+        THREE.MathUtils.lerp(HOUSE_Z, state.z + .9, progress),
+      );
     }
-    if (state.privateBox === "handoff") {
-      const progress = Math.max(0, Math.min(1, (elapsed % 20 - 4.25) / 1.35));
-      lane.privateBox.position.set(.28 + progress * 2.19, 1.56 - progress * .44, -.7 + progress * 1.92);
+    placeCargo(lane.bomb, lane.truck, lane.root, state.bomb, -.2, .39);
+    // The skull is on the bomb's +z face; keep it facing the viewer even
+    // while the bomb is parented to the truck rotated by half a turn.
+    lane.bomb.rotation.y = state.bomb === "truck" ? -Math.PI / 2 : Math.PI / 2;
+    lane.bombSparks.visible = lane.bomb.visible;
+    lane.bombSparks.children.forEach((spark, i) => {
+      const phase = elapsed * 13 + i * 2.3;
+      spark.position.set(Math.sin(phase) * .12, .43 + i * .047 + Math.cos(phase * 1.3) * .045, Math.cos(phase) * .1);
+      spark.scale.setScalar(.75 + .25 * Math.sin(phase * 1.7));
+    });
+    for (const checkpoint of lane.checkpoints) {
+      const active = state.inbound === (checkpoint.z > 0);
+      const progress = active ? state.guardReach : 0;
+      const fromX = -3.15;
+      const toX = -2.75;
+      checkpoint.guard.position.x = THREE.MathUtils.lerp(fromX, toX, progress);
+      checkpoint.guard.position.z = THREE.MathUtils.lerp(checkpoint.z + 1.05, checkpoint.z + .45, progress);
+      if (progress >= 1) {
+        checkpoint.guard.rotation.y = Math.atan2(-checkpoint.guard.position.x, lane.truck.position.z - checkpoint.guard.position.z);
+      } else if (active && state.guardWalking) {
+        checkpoint.guard.rotation.y = Math.atan2(toX - fromX, -.6);
+      } else {
+        checkpoint.guard.rotation.y = Math.PI;
+      }
+      checkpoint.guard.rotation.z = 0;
+      checkpoint.idle?.setEffectiveWeight(active && state.guardWalking ? 0 : 1);
+      checkpoint.walk?.setEffectiveWeight(active && state.guardWalking ? 1 : 0);
+      checkpoint.mixer?.setTime(elapsed % checkpoint.duration);
+      const time = ((elapsed % 20) + 20) % 20;
+      const smooth = (value: number) => {
+        const t = THREE.MathUtils.clamp(value, 0, 1);
+        return t * t * (3 - 2 * t);
+      };
+      let opening = 0;
+      if (checkpoint.z < 0) {
+        if (time >= 6.1 && time < 6.9) opening = smooth((time - 6.1) / .8);
+        else if (time >= 6.9 && time < 9.4) opening = 1;
+        else if (time >= 9.4 && time < 10.2) opening = 1 - smooth((time - 9.4) / .8);
+      } else {
+        if (time >= 16 && time < 16.8) opening = smooth((time - 16) / .8);
+        else if (time >= 16.8 && time < 18.7) opening = 1;
+        else if (time >= 18.7 && time < 19.5) opening = 1 - smooth((time - 18.7) / .8);
+      }
+      checkpoint.barrier.rotation.z = opening * 1.25;
     }
-    positionCargo(lane.bomb, state.bomb, state.z, -.2, state.inbound);
-    // The denied bomb disappears inside the booth, never at the warehouse.
-    if (state.bomb === "handoff") {
-      const progress = Math.max(0, Math.min(1, (elapsed % 20 - 14) / 1.5));
-      lane.bomb.position.set(-.2 + progress * 2.67, 1.56 - progress * .44, .9 + progress * .32);
-    }
-    if (lane.guard) lane.guard.rotation.z = -.24 * state.guardReach;
-    if (lane.barrier) lane.barrier.rotation.z = state.barrierRaised ? 1.25 : 0;
+    // The seized item leaves the bed, reaches the far-side guard's hands,
+    // stays there briefly, and only then disappears into the checkpoint.
+    const moveToGuard = (object: THREE.Group, height: number, checkpoint: Checkpoint, start: number, arrival: number, x: number) => {
+      const progress = THREE.MathUtils.smoothstep(elapsed % 20, start, arrival);
+      object.position.set(
+        THREE.MathUtils.lerp(x, checkpoint.guard.position.x + .45, progress),
+        THREE.MathUtils.lerp(lane.truck.position.y + BED_Y + height, .85, progress) + Math.sin(progress * Math.PI) * .25,
+        THREE.MathUtils.lerp(lane.truck.position.z + .9, checkpoint.guard.position.z + .55, progress),
+      );
+    };
+    if (state.privateBox === "handoff") moveToGuard(lane.privateBox, .2, lane.checkpoints[1], 4.25, 5.25, -.28);
+    if (state.bomb === "handoff") moveToGuard(lane.bomb, .39, lane.checkpoints[0], 14, 15.1, .2);
     if (lane.exclamation) lane.exclamation.visible = state.exclamation;
   }
 
@@ -301,8 +441,6 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
       width = nextWidth; height = nextHeight;
       renderer.setSize(width, height, false);
     }
-    pose(unsafe, elapsed, false);
-    pose(safe, elapsed, true);
     const mobile = width < 680;
     renderer.setScissorTest(mobile);
     if (mobile) {
@@ -313,12 +451,14 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
         renderer.setViewport(0, bottom, width, half);
         renderer.setScissor(0, bottom, width, half);
         const aspect = width / half;
-        const span = 16.5;
+        const span = 19.5;
         camera.left = -span / 2; camera.right = span / 2;
         camera.top = span / (2 * aspect); camera.bottom = -camera.top;
-        camera.position.set(lane.root.position.x + 10, 18, 20);
+        camera.position.set(lane.root.position.x + 10, 18, 16.875);
         camera.lookAt(lane.root.position.x, .1, 0);
+        lane.root.rotation.y = ROAD_ANGLE;
         camera.updateProjectionMatrix();
+        pose(lane, elapsed, lane === safe, getViewportExit(lane));
         renderer.render(scene, camera);
       }
       unsafe.root.visible = safe.root.visible = true;
@@ -330,7 +470,10 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
       camera.top = span / (2 * aspect); camera.bottom = -camera.top;
       camera.position.set(16, 23, 27);
       camera.lookAt(0, 8.5, 0);
+      unsafe.root.rotation.y = safe.root.rotation.y = ROAD_ANGLE;
       camera.updateProjectionMatrix();
+      pose(unsafe, elapsed, false, getViewportExit(unsafe));
+      pose(safe, elapsed, true, getViewportExit(safe));
       renderer.render(scene, camera);
     }
   }
@@ -339,6 +482,7 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
     renderer.setAnimationLoop(null);
     const geometries = new Set<THREE.BufferGeometry>();
     const usedMaterials = new Set<THREE.Material>();
+    const usedTextures = new Set<THREE.Texture>();
     scene.traverse((object) => {
       if (object instanceof THREE.Mesh) {
         geometries.add(object.geometry);
@@ -347,9 +491,10 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
     });
     geometries.forEach((geometry) => geometry.dispose());
     usedMaterials.forEach((mat) => {
-      if (mat instanceof THREE.MeshBasicMaterial) mat.map?.dispose();
+      for (const value of Object.values(mat)) if (value instanceof THREE.Texture) usedTextures.add(value);
       mat.dispose();
     });
+    usedTextures.forEach((texture) => texture.dispose());
     renderer.dispose();
   }
   return { render, dispose };

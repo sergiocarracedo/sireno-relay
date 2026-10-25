@@ -1,8 +1,19 @@
 ---
 import { withBase } from "../lib/with-base";
+import roadUrl from "../assets/3d/road-poly-google.glb?url";
+import carUrl from "../assets/3d/pickup-truck.glb?url";
+import houseUrl from "../assets/3d/bungalow-house.glb?url";
+import officerUrl from "../assets/3d/male-officer.glb?url";
+import boxUrl from "../assets/3d/box-kay-lousberg.glb?url";
+import specialBoxUrl from "../assets/3d/cube-exclamation.glb?url";
+import bombUrl from "../assets/3d/bomb-quaternius.glb?url";
+import towerUrl from "../assets/3d/guard-tower.glb?url";
+import rockUrl from "../assets/3d/railway-rock-cluster.glb?url";
+import spruceUrl from "../assets/3d/spruce-tree.glb?url";
+import oakUrl from "../assets/3d/tree-oak-01.glb?url";
 ---
 
-<div class="hero-scene" data-hero-scene data-logo={withBase("/logo.png")} data-road={withBase("/models/road-straight.glb")} data-rock={withBase("/models/rock-cluster.glb")} data-spruce={withBase("/models/spruce-tree.glb")} data-oak={withBase("/models/tree-oak-01.glb")}>
+<div class="hero-scene" data-hero-scene data-logo={withBase("/logo.png")} data-road={roadUrl} data-car={carUrl} data-house={houseUrl} data-officer={officerUrl} data-box={boxUrl} data-special-box={specialBoxUrl} data-bomb={bombUrl} data-tower={towerUrl} data-rock={rockUrl} data-spruce={spruceUrl} data-oak={oakUrl}>
   <div class="hero-scene__art" aria-hidden="true">
     <img class="hero-scene__poster hero-scene__poster--risk" src={withBase("/hero-scene-poster.svg")} width="1200" height="540" alt="" />
     <img class="hero-scene__poster hero-scene__poster--safe" src={withBase("/hero-scene-poster.svg")} width="1200" height="540" alt="" />
@@ -56,7 +67,7 @@ import { withBase } from "../lib/with-base";
       try {
         const { createHeroScene } = await import("../lib/hero-scene/scene");
         if (disposed || motion.matches) return;
-        scene = await createHeroScene(canvas!, root!.dataset.logo!, root!.dataset.road!, {
+        scene = await createHeroScene(canvas!, root!.dataset.logo!, root!.dataset.road!, root!.dataset.car!, root!.dataset.house!, root!.dataset.officer!, root!.dataset.box!, root!.dataset.specialBox!, root!.dataset.bomb!, root!.dataset.tower!, {
           rock: root!.dataset.rock!, spruce: root!.dataset.spruce!, oak: root!.dataset.oak!,
         });
         scene.render(elapsed);

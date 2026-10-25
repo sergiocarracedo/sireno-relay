@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { CYCLE, routeAt } from "./timeline.ts";
+import { CYCLE, HOUSE_Z, INBOUND_CHECKPOINT_Z, INBOUND_STOP_Z, OUTBOUND_CHECKPOINT_Z, OUTBOUND_STOP_Z, routeAt } from "./timeline.ts";
 
 test("identical outbound loads diverge only at checkpoint", () => {
   assert.equal(routeAt(2, false).privateBox, "truck");
@@ -64,4 +64,46 @@ test("each transition has a visible dwell before the next trip", () => {
   assert.equal(routeAt(15.5, true).bomb, "booth");
   assert.equal(routeAt(16.8, false).bomb, "warehouse");
   assert.equal(routeAt(19.99, false).bomb, "warehouse");
+});
+
+test("both trips move left to right and use opposite viewport edges", () => {
+  const exitZ = 25;
+  assert.ok(routeAt(7.29, false, exitZ).z < -exitZ + .1);
+  assert.equal(routeAt(10.6, false, exitZ).z, exitZ);
+  assert.equal(routeAt(10.6, true, exitZ).z, exitZ);
+  for (const protectedRoute of [false, true]) {
+    for (const [start, end] of [[2.1, 7.3], [10.6, 18.7]]) {
+      for (let t = start; t < end - .1; t += .1) {
+        assert.ok(routeAt(t + .1, protectedRoute, exitZ).z <= routeAt(t, protectedRoute, exitZ).z + 1e-8);
+      }
+    }
+  }
+});
+
+test("the protected pickup stops on opposite sides of the barrier for each pass", () => {
+  assert.equal(routeAt(3.8, true).z, OUTBOUND_STOP_Z);
+  assert.equal(routeAt(13.6, true).z, INBOUND_STOP_Z);
+  // The truck's nose extends about 2 units ahead of its center.
+  assert.ok(OUTBOUND_STOP_Z - 2 > OUTBOUND_CHECKPOINT_Z);
+  assert.ok(INBOUND_STOP_Z - 2 > INBOUND_CHECKPOINT_Z);
+  assert.equal(routeAt(5, true).guardReach, 1);
+  assert.equal(routeAt(5, true).guardWalking, false);
+  assert.equal(routeAt(14, true).guardWalking, true);
+});
+
+test("both pickups load and stop centered on their house", () => {
+  for (const protectedRoute of [false, true]) {
+    assert.equal(routeAt(0, protectedRoute).z, HOUSE_Z);
+    assert.equal(routeAt(2.1, protectedRoute).z, HOUSE_Z);
+    assert.equal(routeAt(protectedRoute ? 18.7 : 16.8, protectedRoute).z, HOUSE_Z);
+  }
+});
+
+test("seized items reach the guard before disappearing", () => {
+  assert.equal(routeAt(5.25, true).privateBox, "handoff");
+  assert.equal(routeAt(5.59, true).privateBox, "handoff");
+  assert.equal(routeAt(5.6, true).privateBox, "booth");
+  assert.equal(routeAt(15.1, true).bomb, "handoff");
+  assert.equal(routeAt(15.49, true).bomb, "handoff");
+  assert.equal(routeAt(15.5, true).bomb, "booth");
 });
