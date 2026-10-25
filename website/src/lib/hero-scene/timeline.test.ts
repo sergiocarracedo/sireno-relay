@@ -91,6 +91,21 @@ test("the protected pickup stops on opposite sides of the barrier for each pass"
   assert.equal(routeAt(14, true).guardWalking, true);
 });
 
+test("barriers stay raised until the pickup's rear clears each checkpoint", () => {
+  for (const [checkpoint, start, end] of [
+    [OUTBOUND_CHECKPOINT_Z, 6.9, 9.4],
+    [INBOUND_CHECKPOINT_Z, 16.8, 18.7],
+  ]) {
+    let cleared = false;
+    for (let time = start; time < end; time += .01) {
+      const state = routeAt(time, true);
+      if (state.z + 2.2 < checkpoint) cleared = true;
+      assert.equal(state.barrierRaised, !cleared, `time=${time}`);
+    }
+    assert.ok(cleared, `the pickup clears checkpoint ${checkpoint}`);
+  }
+});
+
 test("both pickups load and stop centered on their house", () => {
   for (const protectedRoute of [false, true]) {
     assert.equal(routeAt(0, protectedRoute).z, HOUSE_Z);

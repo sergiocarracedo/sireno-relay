@@ -45,7 +45,7 @@ export function routeAt(elapsed: number, protectedRoute: boolean, exitZ = 20): R
     else if (protectedRoute && t < 6.9) state.z = OUTBOUND_STOP_Z;
     else state.z = mix(protectedRoute ? OUTBOUND_STOP_Z : -4.2, -exitZ, between(t, protectedRoute ? 6.9 : 3.8, protectedRoute ? 9.4 : 7.3));
     if (protectedRoute && t >= 3.8) {
-      state.barrierRaised = t >= 6.9 && t < 9.4;
+      state.barrierRaised = t >= 6.9 && state.z + 2.2 >= OUTBOUND_CHECKPOINT_Z;
       if (t >= 4 && t < 4.9) {
         state.guardReach = ease(between(t, 4, 4.9));
         state.guardWalking = true;
@@ -71,7 +71,7 @@ export function routeAt(elapsed: number, protectedRoute: boolean, exitZ = 20): R
       : mix(exitZ, HOUSE_Z, between(t, 10.6, 16.8));
     state.bomb = t < 10.6 ? "outside" : "truck";
     if (protectedRoute && t >= 13.6) {
-      state.barrierRaised = t >= 16.8 && t < 18.7;
+      state.barrierRaised = t >= 16.8 && state.z + 2.2 >= INBOUND_CHECKPOINT_Z;
       if (t >= 13.6 && t < 14.5) {
         state.guardReach = ease(between(t, 13.6, 14.5));
         state.guardWalking = true;

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { clone as cloneSkinnedModel } from "three/addons/utils/SkeletonUtils.js";
-import { HOUSE_Z, INBOUND_CHECKPOINT_Z, OUTBOUND_CHECKPOINT_Z, routeAt } from "./timeline";
+import { HOUSE_Z, INBOUND_CHECKPOINT_Z, INBOUND_STOP_Z, OUTBOUND_CHECKPOINT_Z, OUTBOUND_STOP_Z, routeAt } from "./timeline";
 
 const material = (color: number, emissive = 0) => new THREE.MeshLambertMaterial({ color, emissive, flatShading: true });
 const materials = {
@@ -123,7 +123,7 @@ function addStraightRoad(parent: THREE.Object3D, source: THREE.Object3D) {
   const length = 4;
   const scale = length / size.z;
   const widthScale = 4.5 / size.x;
-  for (let z = -40; z <= 40; z += length) {
+  for (let z = -64; z <= 64; z += length) {
     const segment = source.clone(true);
     segment.scale.set(widthScale, scale, scale);
     segment.position.set(-center.x * widthScale, -bounds.min.y * scale - .07, z - center.z * scale);
@@ -208,6 +208,7 @@ function bombModel(parent: THREE.Object3D, source: THREE.Object3D) {
 
 type Lane = {
   root: THREE.Group;
+  house: THREE.Object3D;
   truck: THREE.Group;
   ordinary: THREE.Group[];
   privateBox: THREE.Group;
@@ -264,7 +265,7 @@ function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: 
   for (const color of sparkColors) {
     bombSparks.add(new THREE.Mesh(new THREE.OctahedronGeometry(.055), new THREE.MeshBasicMaterial({ color })));
   }
-  const lane: Lane = { root, truck, ordinary, privateBox, bomb, bombSparks, checkpoints: [] };
+  const lane: Lane = { root, house, truck, ordinary, privateBox, bomb, bombSparks, checkpoints: [] };
 
   if (protectedRoute) {
     const texture = new THREE.TextureLoader().load(logoUrl);
@@ -285,9 +286,9 @@ function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: 
       tower.add(logo);
 
       const guard = cloneSkinnedModel(officerSource) as THREE.Group;
-      guard.position.set(-3.15, 0, z + 1.05);
+      guard.position.set(-2.15, 0, z + 1.05);
       guard.scale.setScalar(.7);
-      guard.rotation.y = Math.PI;
+      guard.rotation.y = Math.PI / 2;
       root.add(guard);
       const mixer = idle || walk ? new THREE.AnimationMixer(guard) : undefined;
       const idleAction = idle ? mixer!.clipAction(idle) : undefined;
@@ -307,6 +308,7 @@ function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: 
   } else {
     const exclamation = new THREE.Group();
     root.add(exclamation); exclamation.position.set(-1.68, .6, -7);
+    exclamation.rotation.y = Math.PI / 2;
     cuboid(exclamation, .22, .97, .16, materials.danger, 0, .66, 0);
     cuboid(exclamation, .25, .22, .18, materials.danger, 0, -.04, 0);
     lane.exclamation = exclamation;
@@ -328,10 +330,16 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
   loader.setDRACOLoader(draco);
   const [road, sedan, house, officer, box, specialBox, bomb, tower, rock, spruce, oak] = await Promise.all([loader.loadAsync(roadUrl), loader.loadAsync(carUrl), loader.loadAsync(houseUrl), loader.loadAsync(officerUrl), loader.loadAsync(boxUrl), loader.loadAsync(specialBoxUrl), loader.loadAsync(bombUrl), loader.loadAsync(towerUrl), loader.loadAsync(sceneryUrls.rock), loader.loadAsync(sceneryUrls.spruce), loader.loadAsync(sceneryUrls.oak)]);
   draco.dispose();
-  addFacetedGround(scene);
-  addScenery(scene, { rock: rock.scene, spruce: spruce.scene, oak: oak.scene });
+  const backdrop = new THREE.Group();
+  scene.add(backdrop);
+  addFacetedGround(backdrop);
+  addScenery(backdrop, { rock: rock.scene, spruce: spruce.scene, oak: oak.scene });
   const unsafe = buildLane(scene, new THREE.Vector3(ROAD_CENTERS[0][0], 0, ROAD_CENTERS[0][1]), false, logoUrl, road.scene, sedan.scene, house.scene, officer.scene, officer.animations, box.scene, specialBox.scene, bomb.scene, tower.scene);
   const safe = buildLane(scene, new THREE.Vector3(ROAD_CENTERS[1][0], 0, ROAD_CENTERS[1][1]), true, logoUrl, road.scene, sedan.scene, house.scene, officer.scene, officer.animations, box.scene, specialBox.scene, bomb.scene, tower.scene);
+  const labels = {
+    unsafe: canvas.parentElement?.querySelector<HTMLElement>(".hero-scene__label--risk"),
+    safe: canvas.parentElement?.querySelector<HTMLElement>(".hero-scene__label--safe"),
+  };
   const camera = new THREE.OrthographicCamera(-15, 15, 7, -7, .1, 100);
   camera.position.set(16, 23, 27);
   camera.lookAt(0, .3, 0);
@@ -350,6 +358,15 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
       return high;
     };
     return Math.max(edge(-1), edge(1));
+  }
+
+  function placeHouseLabel(lane: Lane, label: HTMLElement | null | undefined, viewportBottom: number, viewportHeight: number) {
+    if (!label) return;
+    camera.updateMatrixWorld();
+    const housePoint = lane.house.localToWorld(new THREE.Vector3(0, .55, 0)).project(camera);
+    label.style.left = `${(housePoint.x + 1) * width / 2}px`;
+    label.style.top = `${height - viewportBottom - (housePoint.y + 1) * viewportHeight / 2}px`;
+    label.style.right = "auto";
   }
 
   function pose(lane: Lane, elapsed: number, protectedRoute: boolean, exitZ: number) {
@@ -386,22 +403,23 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
     for (const checkpoint of lane.checkpoints) {
       const active = state.inbound === (checkpoint.z > 0);
       const progress = active ? state.guardReach : 0;
-      const fromX = -3.15;
-      const toX = -2.75;
-      checkpoint.guard.position.x = THREE.MathUtils.lerp(fromX, toX, progress);
-      checkpoint.guard.position.z = THREE.MathUtils.lerp(checkpoint.z + 1.05, checkpoint.z + .45, progress);
-      if (progress >= 1) {
+      const time = ((elapsed % 20) + 20) % 20;
+      const shoulderX = -2.15;
+      const bedZ = (checkpoint.z > 0 ? INBOUND_STOP_Z : OUTBOUND_STOP_Z) + 2.6;
+      // Stay on the far shoulder and walk alongside the road, not through the truck.
+      checkpoint.guard.position.x = shoulderX;
+      checkpoint.guard.position.z = THREE.MathUtils.lerp(checkpoint.z + 1.05, bedZ, progress);
+      if (active && state.guardWalking) {
+        checkpoint.guard.rotation.y = time >= (state.inbound ? 16.8 : 7) ? Math.PI : 0;
+      } else if (progress >= 1) {
         checkpoint.guard.rotation.y = Math.atan2(-checkpoint.guard.position.x, lane.truck.position.z - checkpoint.guard.position.z);
-      } else if (active && state.guardWalking) {
-        checkpoint.guard.rotation.y = Math.atan2(toX - fromX, -.6);
       } else {
-        checkpoint.guard.rotation.y = Math.PI;
+        checkpoint.guard.rotation.y = Math.PI / 2;
       }
       checkpoint.guard.rotation.z = 0;
       checkpoint.idle?.setEffectiveWeight(active && state.guardWalking ? 0 : 1);
       checkpoint.walk?.setEffectiveWeight(active && state.guardWalking ? 1 : 0);
       checkpoint.mixer?.setTime(elapsed % checkpoint.duration);
-      const time = ((elapsed % 20) + 20) % 20;
       const smooth = (value: number) => {
         const t = THREE.MathUtils.clamp(value, 0, 1);
         return t * t * (3 - 2 * t);
@@ -409,12 +427,10 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
       let opening = 0;
       if (checkpoint.z < 0) {
         if (time >= 6.1 && time < 6.9) opening = smooth((time - 6.1) / .8);
-        else if (time >= 6.9 && time < 9.4) opening = 1;
-        else if (time >= 9.4 && time < 10.2) opening = 1 - smooth((time - 9.4) / .8);
+        else if (time >= 6.9 && time < 9.4) opening = 1 - smooth((checkpoint.z - state.z - 2.2) / 2.7);
       } else {
         if (time >= 16 && time < 16.8) opening = smooth((time - 16) / .8);
-        else if (time >= 16.8 && time < 18.7) opening = 1;
-        else if (time >= 18.7 && time < 19.5) opening = 1 - smooth((time - 18.7) / .8);
+        else if (time >= 16.8 && time < 18.7) opening = 1 - smooth((checkpoint.z - state.z - 2.2) / 2.7);
       }
       checkpoint.barrier.rotation.z = opening * 1.25;
     }
@@ -459,22 +475,43 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
         lane.root.rotation.y = ROAD_ANGLE;
         camera.updateProjectionMatrix();
         pose(lane, elapsed, lane === safe, getViewportExit(lane));
+        placeHouseLabel(lane, lane === safe ? labels.safe : labels.unsafe, bottom, half);
         renderer.render(scene, camera);
       }
       unsafe.root.visible = safe.root.visible = true;
     } else {
       renderer.setViewport(0, 0, width, height);
       const aspect = width / height;
-      const span = 29;
+      const wide = THREE.MathUtils.smoothstep(aspect, 1.3, 2.3);
+      // Keep the forest framing fixed while placing the roads below the copy.
+      unsafe.root.visible = safe.root.visible = false;
+      camera.left = -Math.max(29, 19 * aspect) / 2;
+      camera.right = -camera.left;
+      camera.top = camera.right / aspect; camera.bottom = -camera.top;
+      camera.position.set(16 + ROAD_SHIFT.x * wide, 23 - 8.8 * wide, 27 + ROAD_SHIFT.y * wide);
+      camera.lookAt(ROAD_SHIFT.x * wide, 8.5 - 8.8 * wide, ROAD_SHIFT.y * wide);
+      camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
+      backdrop.visible = false;
+      unsafe.root.visible = safe.root.visible = true;
+      // Give both roads room below the hero copy on wide screens.
+      const verticalSpan = Math.max(29 / aspect, THREE.MathUtils.lerp(19, 38, wide));
+      const span = verticalSpan * aspect;
       camera.left = -span / 2; camera.right = span / 2;
-      camera.top = span / (2 * aspect); camera.bottom = -camera.top;
-      camera.position.set(16, 23, 27);
-      camera.lookAt(0, 8.5, 0);
+      camera.top = verticalSpan / 2; camera.bottom = -camera.top;
+      camera.position.set(16 + ROAD_SHIFT.x * wide, 23 - 4.5 * wide, 27 + ROAD_SHIFT.y * wide);
+      camera.lookAt(ROAD_SHIFT.x * wide, 8.5 - 4.5 * wide, ROAD_SHIFT.y * wide);
       unsafe.root.rotation.y = safe.root.rotation.y = ROAD_ANGLE;
       camera.updateProjectionMatrix();
       pose(unsafe, elapsed, false, getViewportExit(unsafe));
       pose(safe, elapsed, true, getViewportExit(safe));
+      placeHouseLabel(unsafe, labels.unsafe, 0, height);
+      placeHouseLabel(safe, labels.safe, 0, height);
+      renderer.autoClear = false;
+      renderer.clearDepth();
       renderer.render(scene, camera);
+      renderer.autoClear = true;
+      backdrop.visible = true;
     }
   }
 

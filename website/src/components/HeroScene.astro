@@ -15,13 +15,13 @@ import oakUrl from "../assets/3d/tree-oak-01.glb?url";
 
 <div class="hero-scene" data-hero-scene data-logo={withBase("/logo.png")} data-road={roadUrl} data-car={carUrl} data-house={houseUrl} data-officer={officerUrl} data-box={boxUrl} data-special-box={specialBoxUrl} data-bomb={bombUrl} data-tower={towerUrl} data-rock={rockUrl} data-spruce={spruceUrl} data-oak={oakUrl}>
   <div class="hero-scene__art" aria-hidden="true">
-    <img class="hero-scene__poster hero-scene__poster--risk" src={withBase("/hero-scene-poster.svg")} width="1200" height="540" alt="" />
-    <img class="hero-scene__poster hero-scene__poster--safe" src={withBase("/hero-scene-poster.svg")} width="1200" height="540" alt="" />
+    <picture class="hero-scene__poster">
+      <source media="(max-width: 680px)" srcset={withBase("/hero-scene-mobile.webp")} />
+      <img src={withBase("/hero-scene-desktop.webp")} width="1600" height="763" alt="" />
+    </picture>
     <canvas class="hero-scene__canvas" data-hero-canvas></canvas>
     <span class="hero-scene__label hero-scene__label--risk"><i></i> NO POLICY · EXPOSED</span>
     <span class="hero-scene__label hero-scene__label--safe"><i></i> SIRENORELAY · PROTECTED</span>
-    <span class="hero-scene__verdict hero-scene__verdict--risk">PRIVATE DATA OUT · UNSAFE RETURN IN</span>
-    <span class="hero-scene__verdict hero-scene__verdict--safe">PRIVATE DATA HELD · UNSAFE RETURN STOPPED</span>
   </div>
   <button class="hero-scene__control" data-hero-control type="button" aria-label="Pause scene" hidden>Pause motion <span aria-hidden="true">Ⅱ</span></button>
 </div>
