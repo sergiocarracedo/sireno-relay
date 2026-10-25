@@ -35,20 +35,14 @@ function cone(parent: THREE.Object3D, r: number, h: number, sides: number, mat: 
   return mesh;
 }
 
-function tree(parent: THREE.Object3D, x: number, z: number, size = 1) {
-  cuboid(parent, .17 * size, .75 * size, .17 * size, materials.earth, x, .38 * size, z);
-  cone(parent, .61 * size, 1.4 * size, 5, materials.dark, x, 1.2 * size, z);
-  cone(parent, .48 * size, 1.16 * size, 5, materials.grass, x, 1.95 * size, z);
-}
-
 function addCountrysideTerrain(scene: THREE.Scene, source: THREE.Object3D) {
   const terrain = new THREE.Group();
   terrain.name = "countryside-grass-tile-grid";
   scene.add(terrain);
-  const scale = .8;
+  const scale = 1.2;
   const step = 4 * scale;
-  // A 15×15 field extends beyond the camera crop, so every visible edge stays terrain.
-  for (let row = -7; row <= 7; row++) for (let column = -7; column <= 7; column++) {
+  // A 25×25 field extends past the taller hero camera crop in every direction.
+  for (let row = -12; row <= 12; row++) for (let column = -12; column <= 12; column++) {
     const tile = source.clone(true);
     tile.scale.setScalar(scale);
     tile.position.set(column * step, -.225, row * step);
@@ -120,18 +114,13 @@ type Lane = {
   exclamation?: THREE.Group;
 };
 
-function buildLane(scene: THREE.Scene, x: number, protectedRoute: boolean, logoUrl: string, roadTile: THREE.Object3D): Lane {
+function buildLane(scene: THREE.Scene, position: THREE.Vector3, protectedRoute: boolean, logoUrl: string, roadTile: THREE.Object3D): Lane {
   const root = new THREE.Group();
-  root.position.x = x;
+  root.position.copy(position);
+  // Align each local z-axis route to the camera's horizontal screen axis.
+  root.rotation.y = -1.036;
   scene.add(root);
   addStraightRoad(root, roadTile);
-  for (const [tx, tz, size] of [[-3.5, -5.3, 1.1], [3.65, -5.7, 1.25], [-3.55, 3, .95], [3.65, 5.2, 1.15]] as const) tree(root, tx, tz, size);
-  for (const [mx, mz, size] of [[-3.3, -2.3, 2.15], [3.5, 3.4, 1.8]] as const) {
-    const mountain = cone(root, size, size * 1.5, 5, materials.meadow, mx, size * .72, mz);
-    mountain.rotation.y = .4;
-    cone(root, size * .38, size * .4, 5, materials.warehouse, mx, size * 1.48, mz);
-  }
-
   cuboid(root, 2.85, 2.25, 2.25, materials.warehouse, 0, 1.12, -6);
   const roof = cone(root, 2.05, 1.42, 4, materials.roof, 0, 2.95, -6);
   roof.rotation.y = Math.PI / 4;
@@ -202,8 +191,8 @@ export async function createHeroScene(canvas: HTMLCanvasElement, logoUrl: string
   const loader = new GLTFLoader();
   const [terrain, road] = await Promise.all([loader.loadAsync(terrainUrl), loader.loadAsync(roadUrl)]);
   addCountrysideTerrain(scene, terrain.scene);
-  const unsafe = buildLane(scene, -5.3, false, logoUrl, road.scene);
-  const safe = buildLane(scene, 5.3, true, logoUrl, road.scene);
+  const unsafe = buildLane(scene, new THREE.Vector3(2.3, 0, 3.9), false, logoUrl, road.scene);
+  const safe = buildLane(scene, new THREE.Vector3(-2.3, 0, -3.9), true, logoUrl, road.scene);
   const camera = new THREE.OrthographicCamera(-15, 15, 7, -7, .1, 100);
   camera.position.set(16, 23, 27);
   camera.lookAt(0, .3, 0);
