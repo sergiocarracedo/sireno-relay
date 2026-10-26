@@ -1,5 +1,5 @@
 import { defineConfig } from "astro/config";
 
 export default defineConfig({
-  site: "https://sirenorelay.sergiocarracedo.es",
+  site: "https://relay.sireno.de",
 });
