@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.7.0](https://github.com/sergiocarracedo/sireno-relay/compare/v1.6.3...v1.7.0) (2026-10-26)
+
+
+### Features
+
+* **audit:** classify provider failures safely ([7cb0dff](https://github.com/sergiocarracedo/sireno-relay/commit/7cb0dff2f3c1a46c518a422d6230a3c2b714af93))
+* **audit:** summarize MCP responses safely ([d205cb4](https://github.com/sergiocarracedo/sireno-relay/commit/d205cb4a9c530b450267ca1ec85d5ef64edcbe2d))
+* **website:** add illustrated relay hero scene ([98bcaa1](https://github.com/sergiocarracedo/sireno-relay/commit/98bcaa1231bd197b26a8d0660fa72087edf2db00))
+* **website:** add low-poly relay hero scene ([b57249c](https://github.com/sergiocarracedo/sireno-relay/commit/b57249cf39b48421b831c62011e89494fcae3563))
+* **website:** add social metadata and Home Assistant section ([f9ef874](https://github.com/sergiocarracedo/sireno-relay/commit/f9ef8746bef1b8b6d7b68e4f358beab267d09dd8))
+* **website:** align the hero routes across the scene ([0ef6fe0](https://github.com/sergiocarracedo/sireno-relay/commit/0ef6fe090e33d710467ed8befcc9c66892a88039))
+* **website:** build hero terrain from countryside tiles ([5988be9](https://github.com/sergiocarracedo/sireno-relay/commit/5988be967b33405acfe47a844bce2ca2458fca76))
+* **website:** clarify relay policy boundary ([0bc7269](https://github.com/sergiocarracedo/sireno-relay/commit/0bc7269294e511c2dde2c09d1086094f6df00218))
+* **website:** establish the revised hero scene baseline ([92e9395](https://github.com/sergiocarracedo/sireno-relay/commit/92e93953644600b44e84f927a8a0b5c47d27c362))
+* **website:** extend low-poly hero terrain ([4a53080](https://github.com/sergiocarracedo/sireno-relay/commit/4a53080ef4add5a84dc1f0ed898220ef0426b0f6))
+* **website:** layer the hero over a low-poly diorama ([18d5cfc](https://github.com/sergiocarracedo/sireno-relay/commit/18d5cfca8b39f4f331bd83efada3690300c10f46))
+* **website:** offset hero routes and turn camera with scroll ([ea6f170](https://github.com/sergiocarracedo/sireno-relay/commit/ea6f170528dd5f953d285fe3b49102758e9caaf9))
+* **website:** refine hero checkpoint and responsive framing ([a6558d3](https://github.com/sergiocarracedo/sireno-relay/commit/a6558d3dd3f9cd42044a4f7edc0dbdb2a548f0fa))
+* **website:** reshape the hero as a dark low-poly landscape ([c487ce6](https://github.com/sergiocarracedo/sireno-relay/commit/c487ce646f5c6cefa0f503b895805a64753635c0))
+* **website:** sculpt hero terrain from elevation data ([52c0d3b](https://github.com/sergiocarracedo/sireno-relay/commit/52c0d3bb9d1c0f9410d673d1748389fe94775161))
+* **website:** tell the relay boundary story in a low-poly hero ([d51d5dd](https://github.com/sergiocarracedo/sireno-relay/commit/d51d5dd3e2692df7055e01b2488632962fb71ce4))
+
+
+### Bug Fixes
+
+* **search:** preserve empty list queries ([2bd1348](https://github.com/sergiocarracedo/sireno-relay/commit/2bd1348fc950adcff796edecac93367552168368))
+* **website:** keep hero scene framing fixed across widths ([491b3a4](https://github.com/sergiocarracedo/sireno-relay/commit/491b3a43fe414acc00a223d1958aa00c57c411f8))
+
 ## [1.6.3](https://github.com/sergiocarracedo/sireno-relay/compare/v1.6.2...v1.6.3) (2026-10-24)
 
 
