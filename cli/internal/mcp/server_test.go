@@ -175,6 +175,64 @@ users:
 	}
 }
 
+func TestHandlerExposesOnlyAllowlistedMCPTools(t *testing.T) {
+	digest := sha256.Sum256([]byte("test-token"))
+	path := filepath.Join(t.TempDir(), "config.yml")
+	text := fmt.Sprintf(`providers:
+  home:
+    address: me@example.org
+    imap: {address: "imap.example.org:993", username: me, password: [printf, password]}
+    smtp: {address: "smtp.example.org:465", username: me, password: [printf, password]}
+profiles:
+  bot: {folders: {allow: ["ro:INBOX"]}}
+users:
+  bot: {provider: home, profile: bot, token_hash: %x}
+`, digest)
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	h := Handler(&relay.Relay{ConfigPath: path, Provider: fakeProvider{}, Store: mustMCPStore(t)})
+	initialize := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}`))
+	initialize.Header.Set("Authorization", "Bearer test-token")
+	initialize.Header.Set("Accept", "application/json, text/event-stream")
+	initialized := httptest.NewRecorder()
+	h.ServeHTTP(initialized, initialize)
+	if initialized.Code != http.StatusOK || initialized.Header().Get("Mcp-Session-Id") == "" {
+		t.Fatalf("initialize status=%d headers=%v body=%s", initialized.Code, initialized.Header(), initialized.Body.String())
+	}
+	list := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`))
+	list.Header.Set("Authorization", "Bearer test-token")
+	list.Header.Set("Accept", "application/json, text/event-stream")
+	list.Header.Set("Mcp-Session-Id", initialized.Header().Get("Mcp-Session-Id"))
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, list)
+	if response.Code != http.StatusOK {
+		t.Fatalf("tools/list status=%d body=%s", response.Code, response.Body.String())
+	}
+	for _, tool := range []string{"list_folders", "list_messages", "search_messages", "read_message", "read_messages", "read_attachment", "send_message", "update_message_flags"} {
+		if !strings.Contains(response.Body.String(), `"name":"`+tool+`"`) {
+			t.Fatalf("missing allowed tool %q: %s", tool, response.Body.String())
+		}
+	}
+	for _, forbidden := range []string{"bash", "shell", "skill", "exec", "command"} {
+		if strings.Contains(strings.ToLower(response.Body.String()), `"name":"`+forbidden+`"`) {
+			t.Fatalf("unexpected escape tool %q: %s", forbidden, response.Body.String())
+		}
+	}
+}
+
+func TestHandlerRejectsCrossOriginMCPRequestsBeforeAuthentication(t *testing.T) {
+	r := &relay.Relay{ConfigPath: filepath.Join(t.TempDir(), "missing.yml"), Provider: fakeProvider{}, Store: mustMCPStore(t)}
+	h := Handler(r)
+	crossOrigin := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	crossOrigin.Header.Set("Origin", "https://attacker.example")
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, crossOrigin)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin status=%d", response.Code)
+	}
+}
+
 func TestAttachmentEndpointRechecksFilteredView(t *testing.T) {
 	digest := sha256.Sum256([]byte("test-token"))
 	path := filepath.Join(t.TempDir(), "config.yml")

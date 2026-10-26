@@ -10,3 +10,5 @@ dist/
 website/node_modules/
 website/.astro/
 website/dist/
+.worktrees
+assets/3d/

@@ -74,7 +74,7 @@ logging:
     capture_content: true
 ```
 
-`mcp.capture_content` is retained for configuration compatibility but never records request or response content. Audit output contains only bounded operational metadata such as the MCP method, tool, status, and duration; it never records bearer tokens, credentials, mail bodies, or attachment bytes. The target file is created with mode `0600`; SirenoRELAY refuses an existing target that is not an owner-only regular file. Rotated files are removed after the retention period.
+`mcp.capture_content` is retained for configuration compatibility but never records request or response content. Audit output contains bounded operational metadata such as the MCP method, tool, status, duration, and safe response summaries: visible folder names/counts, or message and attachment counts. For upstream failures, it records a sanitized `provider_failed` outcome with stable `provider_operation` and `failure_reason` fields (for example, `envelope_listing` and `envelope_listing_failed`), never the provider error text. It never records bearer tokens, credentials, mail subjects, addresses, bodies, attachment names, or attachment bytes. The target file is created with mode `0600`; SirenoRELAY refuses an existing target that is not an owner-only regular file. Rotated files are removed after the retention period.
 
 ## `providers.<name>`
 

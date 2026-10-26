@@ -156,8 +156,12 @@ the same OS user.
 - `rotation.max_file_size`: non-negative byte count or `KiB`, `MiB`, or `GiB`
   size (for example `100MiB`).
 - `mcp.capture_content`: retained for configuration compatibility. Request and
-  response content is never recorded; audit output is bounded operational
-  metadata and does not include credentials or bearer tokens.
+  response content is never recorded. Audit output includes bounded operational
+  metadata plus safe summaries: visible folder names/counts and message/
+  attachment counts. Provider failures include stable operation/reason fields,
+  but not provider error text, credentials,
+  bearer tokens, message subjects, addresses, bodies, attachment names, or
+  attachment bytes.
 
 The `serve --debug` flag enables debug-level operational metadata on stdout; it
 does not enable MCP content capture.

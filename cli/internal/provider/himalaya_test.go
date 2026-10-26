@@ -172,6 +172,17 @@ func TestHimalayaPageUsesBoundedSearchAndTargetedReads(t *testing.T) {
 	}
 }
 
+func TestHimalayaPageListsWhenQueryIsEmpty(t *testing.T) {
+	runner := &recordingRunner{output: []byte(`[]`)}
+	account := config.Provider{Address: "owner@example.org", IMAP: config.Server{Address: "imap:993", Username: "owner", Password: config.Password{Value: "secret"}}, SMTP: config.Server{Address: "smtp:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}}}
+	if _, err := (Himalaya{Runner: runner}).Page(context.Background(), account, PageRequest{Folder: "INBOX", Page: 1, PageSize: 20}); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.args) != 1 || !containsSequence(runner.args[0], "envelope", "list", "--mailbox", "INBOX", "--page", "1", "--page-size", "20") || containsSequence(runner.args[0], "--") {
+		t.Fatalf("unexpected command: %#v", runner.args)
+	}
+}
+
 func TestHimalayaPageNormalizesKeywordSearchesAndPreservesHimalayaQueries(t *testing.T) {
 	account := config.Provider{Address: "owner@example.org", IMAP: config.Server{Address: "imap:993", Username: "owner", Password: config.Password{Value: "secret"}}, SMTP: config.Server{Address: "smtp:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}}}
 	for _, test := range []struct {
@@ -214,6 +225,32 @@ func TestHimalayaPageDoesNotInterpretQueryTermsAsOptions(t *testing.T) {
 	}
 	if len(runner.args) != 1 || !containsSequence(runner.args[0], "--page-size", "20", "--", "subject", `"--config`, "/owner-only/config.toml\"", "or", "body", `"--config`, "/owner-only/config.toml\"") {
 		t.Fatalf("query options escaped the terminator: %#v", runner.args)
+	}
+}
+
+func TestHimalayaPageRejectsInvalidRequestsBeforeStartingACommand(t *testing.T) {
+	account := config.Provider{Address: "owner@example.org", IMAP: config.Server{Address: "imap:993", Username: "owner", Password: config.Password{Value: "secret"}}, SMTP: config.Server{Address: "smtp:465", Username: "owner", Password: config.Password{Value: "smtp-secret"}}}
+	for _, test := range []struct {
+		name    string
+		request PageRequest
+	}{
+		{"empty folder", PageRequest{Page: 1, PageSize: 20}},
+		{"zero page", PageRequest{Folder: "INBOX", PageSize: 20}},
+		{"page size over limit", PageRequest{Folder: "INBOX", Page: 1, PageSize: 21}},
+		{"oversized query", PageRequest{Folder: "INBOX", Page: 1, PageSize: 20, Query: strings.Repeat("a", 513)}},
+		{"newline query", PageRequest{Folder: "INBOX", Page: 1, PageSize: 20, Query: "body receipt\n--config injected"}},
+		{"carriage return query", PageRequest{Folder: "INBOX", Page: 1, PageSize: 20, Query: "body receipt\r--config injected"}},
+		{"NUL query", PageRequest{Folder: "INBOX", Page: 1, PageSize: 20, Query: "body receipt\x00--config injected"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runner := &recordingRunner{output: []byte(`[]`)}
+			if _, err := (Himalaya{Runner: runner}).Page(context.Background(), account, test.request); err == nil || err.Error() != "invalid page request" {
+				t.Fatalf("error=%v", err)
+			}
+			if len(runner.args) != 0 {
+				t.Fatalf("invalid request invoked himalaya: %#v", runner.args)
+			}
+		})
 	}
 }
 
