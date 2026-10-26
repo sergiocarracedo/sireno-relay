@@ -3,6 +3,7 @@ import "../styles/site.css";
 import { withBase } from "../lib/with-base";
 
 const { title = "SirenoRELAY", description = "Policy-filtered email access for agents." } = Astro.props;
+const socialImage = new URL(withBase("/hero-scene-desktop.webp"), Astro.site).href;
 ---
 
 <!doctype html>
@@ -11,6 +12,21 @@ const { title = "SirenoRELAY", description = "Policy-filtered email access for a
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
+    <link rel="canonical" href={Astro.url.href} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SirenoRELAY" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={Astro.url.href} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:width" content="1720" />
+    <meta property="og:image:height" content="610" />
+    <meta property="og:image:alt" content="A guarded road through a forest, illustrating policy-boundary email access." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content="A guarded road through a forest, illustrating policy-boundary email access." />
     <link rel="icon" href={withBase("/favicon.ico")} sizes="any" />
     <link rel="icon" href={withBase("/favicon.png")} type="image/png" sizes="512x512" />
     <meta name="color-scheme" content="light dark" />
