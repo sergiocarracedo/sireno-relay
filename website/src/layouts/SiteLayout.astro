@@ -4,7 +4,7 @@ import { withBase } from "../lib/with-base";
 
 const { title = "SirenoRELAY", description = "Policy-filtered email access for agents." } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site).href;
-const socialImage = new URL(withBase("/hero-scene-desktop.webp"), Astro.site).href;
+const socialImage = new URL(withBase("/og-sirenorelay.png"), Astro.site).href;
 ---
 
 <!doctype html>
@@ -20,14 +20,14 @@ const socialImage = new URL(withBase("/hero-scene-desktop.webp"), Astro.site).hr
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:image" content={socialImage} />
-    <meta property="og:image:width" content="1720" />
-    <meta property="og:image:height" content="610" />
-    <meta property="og:image:alt" content="A guarded road through a forest, illustrating policy-boundary email access." />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="SirenoRELAY: agentic email access on your terms, with a protected route through a low-poly forest." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={socialImage} />
-    <meta name="twitter:image:alt" content="A guarded road through a forest, illustrating policy-boundary email access." />
+    <meta name="twitter:image:alt" content="SirenoRELAY: agentic email access on your terms, with a protected route through a low-poly forest." />
     <link rel="icon" href={withBase("/favicon.ico")} sizes="any" />
     <link rel="icon" href={withBase("/favicon.png")} type="image/png" sizes="512x512" />
     <meta name="color-scheme" content="light dark" />
